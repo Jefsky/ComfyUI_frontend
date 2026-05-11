@@ -221,11 +221,10 @@ function collectTargets(
 }
 
 /**
- * Tolerant variant of {@link collectTargets} for the planner/classifier path.
- * Skips dangling link IDs and returns whatever surviving targets remain,
- * matching the behavior of the legacy `classifyProxyEntry.collectPrimitiveTargets`
- * helper (which the merged file replaced). Repair still uses the strict
- * {@link collectTargets} so a partial fan-out cannot be silently mutated.
+ * Tolerant variant of {@link collectTargets} for the classifier path.
+ * Skips dangling link IDs and returns whatever surviving targets remain.
+ * Repair still uses the strict {@link collectTargets} so a partial fan-out
+ * cannot be silently mutated.
  */
 function collectTargetsForClassification(
   hostNode: SubgraphNode,
@@ -724,4 +723,52 @@ function appendQuarantine(
   }
   if (merged.length === 0) delete hostNode.properties[QUARANTINE_PROPERTY]
   else hostNode.properties[QUARANTINE_PROPERTY] = merged
+}
+
+/**
+ * Read the parsed quarantine list from a host SubgraphNode. Returns an empty
+ * array when the property is missing or malformed.
+ */
+export function readHostQuarantine(
+  hostNode: SubgraphNode
+): ProxyWidgetErrorQuarantineEntry[] {
+  return parseProxyWidgetErrorQuarantine(
+    hostNode.properties[QUARANTINE_PROPERTY]
+  )
+}
+
+interface MakeQuarantineEntryArgs {
+  originalEntry: SerializedProxyWidgetTuple
+  reason: ProxyWidgetQuarantineReason
+  hostValue?: TWidgetValue
+}
+
+/**
+ * Construct a quarantine entry pinned to the current schema version. Used by
+ * tests and any caller that needs to seed the quarantine list independently of
+ * the migration pipeline.
+ */
+export function makeQuarantineEntry(
+  args: MakeQuarantineEntryArgs
+): ProxyWidgetErrorQuarantineEntry {
+  const entry: ProxyWidgetErrorQuarantineEntry = {
+    originalEntry: args.originalEntry,
+    reason: args.reason,
+    attemptedAtVersion: QUARANTINE_VERSION
+  }
+  if (args.hostValue !== undefined) {
+    entry.hostValue = args.hostValue
+  }
+  return entry
+}
+
+/**
+ * Append entries to the host quarantine, deduplicating by `originalEntry`.
+ * No-op when `entries` is empty.
+ */
+export function appendHostQuarantine(
+  hostNode: SubgraphNode,
+  entries: readonly ProxyWidgetErrorQuarantineEntry[]
+): void {
+  appendQuarantine(hostNode, entries)
 }
