@@ -228,8 +228,28 @@ export class SubgraphNode extends LGraphNode implements BaseLGraph {
     if (cachedViews?.version === this._cacheVersion) return cachedViews.views
 
     const linkedEntries = this._getLinkedPromotionEntries()
-    const displayNameByViewKey = this._buildDisplayNameByViewKey(linkedEntries)
-    const reconcileEntries = this._buildLinkedReconcileEntries(linkedEntries)
+    const reconcileEntries: Array<{
+      sourceNodeId: string
+      sourceWidgetName: string
+      viewKey: string
+      slotName: string
+    }> = []
+    const displayNameByViewKey = new Map<string, string>()
+    for (const entry of linkedEntries) {
+      const viewKey = this._makePromotionViewKey(
+        entry.inputKey,
+        entry.sourceNodeId,
+        entry.sourceWidgetName,
+        entry.inputName
+      )
+      reconcileEntries.push({
+        sourceNodeId: entry.sourceNodeId,
+        sourceWidgetName: entry.sourceWidgetName,
+        slotName: entry.slotName,
+        viewKey
+      })
+      displayNameByViewKey.set(viewKey, entry.inputName)
+    }
 
     const views = this._promotedViewManager.reconcile(
       reconcileEntries,
@@ -258,45 +278,6 @@ export class SubgraphNode extends LGraphNode implements BaseLGraph {
   private _mutateInputs(fn: () => void): void {
     fn()
     this.invalidatePromotedViews()
-  }
-
-  private _buildLinkedReconcileEntries(
-    linkedEntries: LinkedPromotionEntry[]
-  ): Array<{
-    sourceNodeId: string
-    sourceWidgetName: string
-    viewKey: string
-    slotName: string
-  }> {
-    return linkedEntries.map(
-      ({ inputKey, inputName, slotName, sourceNodeId, sourceWidgetName }) => ({
-        sourceNodeId,
-        sourceWidgetName,
-        slotName,
-        viewKey: this._makePromotionViewKey(
-          inputKey,
-          sourceNodeId,
-          sourceWidgetName,
-          inputName
-        )
-      })
-    )
-  }
-
-  private _buildDisplayNameByViewKey(
-    linkedEntries: LinkedPromotionEntry[]
-  ): Map<string, string> {
-    return new Map(
-      linkedEntries.map((entry) => [
-        this._makePromotionViewKey(
-          entry.inputKey,
-          entry.sourceNodeId,
-          entry.sourceWidgetName,
-          entry.inputName
-        ),
-        entry.inputName
-      ])
-    )
   }
 
   private _makePromotionViewKey(
