@@ -17,6 +17,7 @@ import {
   resetSubgraphFixtureState
 } from '@/lib/litegraph/src/subgraph/__fixtures__/subgraphHelpers'
 
+import { flushProxyWidgetMigration as flushProxyWidgetMigrationMerged } from '@/core/graph/subgraph/migration/proxyWidgetMigration'
 import { flushProxyWidgetMigration } from '@/core/graph/subgraph/migration/proxyWidgetMigrationFlush'
 import { readHostQuarantine } from '@/core/graph/subgraph/migration/quarantineEntry'
 import { wireProxyWidgetMigrationFlush } from '@/core/graph/subgraph/migration/wireProxyWidgetMigrationFlush'
@@ -179,6 +180,50 @@ describe(flushProxyWidgetMigration, () => {
       expect.objectContaining({
         sourceNodeId: String(innerNode.id),
         sourcePreviewName: '$$canvas-image-preview'
+      })
+    ])
+  })
+
+  it('keeps surviving primitive targets when one fan-out link is dangling', () => {
+    const host = buildHost()
+
+    const primitive = new LGraphNode('PrimitiveNode')
+    primitive.type = 'PrimitiveNode'
+    primitive.addOutput('value', 'INT')
+    primitive.addWidget('number', 'value', 7, () => {})
+    host.subgraph.add(primitive)
+
+    const target = new LGraphNode('Target')
+    const targetSlot = target.addInput('value', 'INT')
+    targetSlot.widget = { name: 'value' }
+    target.addWidget('number', 'value', 0, () => {})
+    host.subgraph.add(target)
+
+    primitive.connect(0, target, 0)
+
+    // Inject a dangling link id into the primitive's output: present in
+    // `outputs[0].links` but absent from `subgraph.links`.
+    const danglingLinkId = 999_999
+    expect(host.subgraph.links.has(danglingLinkId)).toBe(false)
+    primitive.outputs[0].links = [
+      ...(primitive.outputs[0].links ?? []),
+      danglingLinkId
+    ]
+
+    host.properties.proxyWidgets = [[String(primitive.id), 'value']]
+
+    const result = flushProxyWidgetMigrationMerged({ hostNode: host })
+
+    // Before the fix the merged classifier collapsed the dangling link into
+    // an empty plan and quarantined as 'unlinkedSourceWidget'. After the fix
+    // the surviving target is shipped through to the primitive-bypass repair,
+    // which (correctly) still treats the dangling link as fatal and emits
+    // the 'primitiveBypassFailed' reason instead.
+    expect(result.quarantined).toBe(1)
+    expect(readHostQuarantine(host)).toEqual([
+      expect.objectContaining({
+        originalEntry: [String(primitive.id), 'value'],
+        reason: 'primitiveBypassFailed'
       })
     ])
   })
