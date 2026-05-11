@@ -202,4 +202,20 @@ describe('_startDraggingItems defers onSelectionChange', () => {
 
     expect(() => vi.advanceTimersByTime(16)).not.toThrow()
   })
+
+  it('queues separate RAF callbacks for rapid successive drags', () => {
+    const node2 = new LGraphNode('test2')
+    node2.size = [200, 100]
+    canvas.graph!.add(node2)
+
+    const onSelectionChange = vi.fn()
+    canvas.onSelectionChange = onSelectionChange
+
+    canvas['_startDraggingItems'](node, pointer, true)
+    canvas['_startDraggingItems'](node2, pointer, true)
+
+    vi.advanceTimersByTime(16)
+
+    expect(onSelectionChange).toHaveBeenCalledTimes(2)
+  })
 })
