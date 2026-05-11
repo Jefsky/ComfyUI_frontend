@@ -1,24 +1,3 @@
-/**
- * Black-box tests for the merged `flushProxyWidgetMigration` entry point.
- *
- * This file replaces 7 white-box test files that targeted private helpers
- * (planner, classifier, value-widget repair, primitive-fanout repair,
- * preview-exposure migration, quarantine helpers, and an older flush shim).
- * Every behavior previously asserted via spies on those helpers is now
- * asserted through one of the four side effects observable from the public
- * API:
- *
- *   1. The numeric counters returned in `FlushResult`
- *      (`repaired`, `primitiveRepaired`, `previewMigrated`, `quarantined`).
- *   2. Host-side state: SubgraphInputs created on `host.subgraph.inputs`,
- *      promoted widget values updated, link reconnections.
- *   3. The PreviewExposureStore contents for the host's locator.
- *   4. The host's `properties.proxyWidgets` (cleared on success) and
- *      `properties.proxyWidgetErrorQuarantine` (entries appended on failure).
- *
- * White-box tests for the planner and classifier were dropped entirely:
- * every distinct plan kind is reachable through the cases below.
- */
 import { createTestingPinia } from '@pinia/testing'
 import { fromPartial } from '@total-typescript/shoehorn'
 import { setActivePinia } from 'pinia'
@@ -57,7 +36,6 @@ beforeEach(() => {
   LGraph.proxyWidgetMigrationFlush = undefined
 })
 
-// Shared host builder used by all tests below.
 function buildHost(): SubgraphNode {
   const subgraph = createTestSubgraph()
   const hostNode = createTestSubgraphNode(subgraph)
@@ -234,7 +212,6 @@ describe('flushProxyWidgetMigration', () => {
       })
 
       host.properties.proxyWidgets = [[String(inner.id), 'seed']]
-      // Sparse: index 0 is a hole.
       const sparse: unknown[] = []
       const result = flushProxyWidgetMigration({
         hostNode: host,
@@ -338,8 +315,6 @@ describe('flushProxyWidgetMigration', () => {
         quarantined: 0
       })
       expect(host.subgraph.inputs).toHaveLength(inputCountBefore + 1)
-      // After mutation each target's slot should no longer be linked to the
-      // primitive (it's linked to the new SubgraphInput instead).
       for (const target of targets) {
         const slot = target.inputs[0]
         expect(slot.link).not.toBeNull()
@@ -354,7 +329,6 @@ describe('flushProxyWidgetMigration', () => {
         targetCount: 2
       })
 
-      // Two entries point at the same primitive widget; coalesce to one repair.
       host.properties.proxyWidgets = [
         [String(primitive.id), 'value'],
         [String(primitive.id), 'value']
@@ -362,7 +336,6 @@ describe('flushProxyWidgetMigration', () => {
       const result = flushProxyWidgetMigration({ hostNode: host })
 
       expect(result).toMatchObject({ primitiveRepaired: 1, quarantined: 0 })
-      // Two targets → two reconnects regardless of duplicate cohort entries.
       for (const target of targets) {
         const slot = target.inputs[0]
         const link = host.subgraph.links.get(slot.link!)
@@ -427,7 +400,6 @@ describe('flushProxyWidgetMigration', () => {
       const { primitive, targets } = addPrimitiveWithTargets(host, {
         targetCount: 1
       })
-      // Make the target slot type incompatible with the primitive's INT output.
       targets[0].inputs[0].type = 'STRING'
 
       const inputCountBefore = host.subgraph.inputs.length
@@ -435,7 +407,6 @@ describe('flushProxyWidgetMigration', () => {
       const result = flushProxyWidgetMigration({ hostNode: host })
 
       expect(result).toMatchObject({ primitiveRepaired: 0, quarantined: 1 })
-      // Original SubgraphInputs untouched; no new SubgraphInput created.
       expect(host.subgraph.inputs).toHaveLength(inputCountBefore)
       expect(readHostQuarantine(host)).toEqual([
         expect.objectContaining({
@@ -449,8 +420,6 @@ describe('flushProxyWidgetMigration', () => {
       const host = buildHost()
       const { primitive } = addPrimitiveWithTargets(host, { targetCount: 1 })
 
-      // Inject a dangling link id into the primitive's output: present in
-      // `outputs[0].links` but absent from `subgraph.links`.
       const danglingLinkId = 999_999
       expect(host.subgraph.links.has(danglingLinkId)).toBe(false)
       primitive.outputs[0].links = [
@@ -528,7 +497,6 @@ describe('flushProxyWidgetMigration', () => {
 
       const store = usePreviewExposureStore()
       const locator = String(host.id)
-      // Pre-seed the store with an exposure that occupies the canonical name.
       store.addExposure(host.rootGraph.id, locator, {
         sourceNodeId: String(innerA.id),
         sourcePreviewName: '$$canvas-image-preview'
@@ -567,7 +535,6 @@ describe('flushProxyWidgetMigration', () => {
       const result = flushProxyWidgetMigration({ hostNode: host })
 
       expect(result).toMatchObject({ previewMigrated: 1, quarantined: 0 })
-      // Exactly one exposure: the existing one was reused.
       expect(store.getExposures(host.rootGraph.id, locator)).toHaveLength(1)
     })
   })
@@ -630,7 +597,6 @@ describe('flushProxyWidgetMigration', () => {
       const first = readHostQuarantine(host)
       expect(first).toHaveLength(1)
 
-      // A separate entry with a different disambiguator must coexist.
       host.properties.proxyWidgets = [['9999', 'seed', 'inner-leaf']]
       flushProxyWidgetMigration({ hostNode: host })
 
@@ -649,8 +615,6 @@ describe('flushProxyWidgetMigration', () => {
       const firstQuarantine = readHostQuarantine(host)
       expect(firstQuarantine).toHaveLength(1)
 
-      // Re-seed identical proxyWidgets to simulate a stale legacy reload of
-      // the same unresolved entry.
       host.properties.proxyWidgets = [['9999', 'seed']]
       flushProxyWidgetMigration({ hostNode: host })
 
@@ -731,10 +695,8 @@ describe('flushProxyWidgetMigration', () => {
         previewMigrated: 1,
         quarantined: 0
       })
-      // Value branch created exactly one new SubgraphInput.
       expect(host.subgraph.inputs).toHaveLength(subgraphInputCountBefore + 1)
       expect(host.subgraph.inputs.find((i) => i.name === 'seed')).toBeDefined()
-      // Preview branch routed through the store, not as a SubgraphInput.
       const exposures = usePreviewExposureStore().getExposures(
         host.rootGraph.id,
         String(host.id)
@@ -765,9 +727,7 @@ describe('flushProxyWidgetMigration', () => {
         hostWidgetValues: sparse
       })
 
-      // Both entries reach repair successfully (sparse hole is not a failure).
       expect(result).toMatchObject({ repaired: 2, quarantined: 0 })
-      // Both SubgraphInputs got created.
       expect(host.subgraph.inputs.find((i) => i.name === 'a')).toBeDefined()
       expect(host.subgraph.inputs.find((i) => i.name === 'b')).toBeDefined()
     })

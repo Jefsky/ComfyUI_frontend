@@ -28,7 +28,6 @@ import { usePreviewExposureStore } from '@/stores/previewExposureStore'
 
 interface FlushArgs {
   hostNode: SubgraphNode
-  /** widgets_values from the host node at parse time. May be sparse. */
   hostWidgetValues?: readonly unknown[]
 }
 
@@ -66,7 +65,6 @@ type Plan =
 interface PendingEntry {
   normalized: LegacyProxyEntrySource
   hostValue: TWidgetValue | undefined
-  /** True when the host widgets_values had a sparse hole at this index. */
   isHole: boolean
   plan: Plan
 }
@@ -75,14 +73,6 @@ const PRIMITIVE_NODE_TYPE = 'PrimitiveNode'
 const QUARANTINE_PROPERTY = 'proxyWidgetErrorQuarantine'
 const QUARANTINE_VERSION = 1
 
-/**
- * Forward-ratchet a host SubgraphNode's legacy `properties.proxyWidgets` into
- * canonical representations: linked SubgraphInputs, primitive-fanout cohorts
- * collapsed to one input per primitive, preview entries via
- * {@link usePreviewExposureStore}, and unrepairable plans appended to
- * `properties.proxyWidgetErrorQuarantine`. Idempotent: subsequent calls
- * short-circuit because legacy `proxyWidgets` is removed on success.
- */
 export function flushProxyWidgetMigration(args: FlushArgs): FlushResult {
   const { hostNode, hostWidgetValues } = args
 
@@ -152,10 +142,6 @@ export function flushProxyWidgetMigration(args: FlushArgs): FlushResult {
     result.quarantined = quarantineToAppend.length
   }
 
-  // Idempotency anchor: once entries have been processed, drop the legacy
-  // payload so subsequent loads/configures take the no-op short-circuit.
-  // Canonical state now lives on linked SubgraphInputs, the
-  // PreviewExposureStore, and properties.proxyWidgetErrorQuarantine.
   delete hostNode.properties.proxyWidgets
 
   return result
@@ -176,7 +162,6 @@ function pickHostValue(
   return { value: hostWidgetValues[index] as TWidgetValue, isHole: false }
 }
 
-/** Returns the matched input, `'ambiguous'` when >1 match, or undefined. */
 function findHostInputForLinkedSource(
   hostNode: SubgraphNode,
   sourceNodeId: string,
@@ -200,7 +185,7 @@ function findHostInputForLinkedSource(
   return 'ambiguous'
 }
 
-function collectTargets(
+function collectTargetsStrict(
   hostNode: SubgraphNode,
   primitiveNode: LGraphNode
 ): PrimitiveBypassTargetRef[] | undefined {
@@ -210,7 +195,6 @@ function collectTargets(
   const targets: PrimitiveBypassTargetRef[] = []
   for (const linkId of linkIds) {
     const link = subgraph.links.get(linkId)
-    // Strict semantics: any dangling link aborts the repair-side caller.
     if (!link) return undefined
     targets.push({
       targetNodeId: link.target_id,
@@ -220,13 +204,7 @@ function collectTargets(
   return targets
 }
 
-/**
- * Tolerant variant of {@link collectTargets} for the classifier path.
- * Skips dangling link IDs and returns whatever surviving targets remain.
- * Repair still uses the strict {@link collectTargets} so a partial fan-out
- * cannot be silently mutated.
- */
-function collectTargetsForClassification(
+function collectTargetsSkippingDangling(
   hostNode: SubgraphNode,
   primitiveNode: LGraphNode
 ): PrimitiveBypassTargetRef[] {
@@ -282,7 +260,7 @@ function classify(
   }
 
   if (sourceNode.type === PRIMITIVE_NODE_TYPE) {
-    const targets = collectTargetsForClassification(hostNode, sourceNode)
+    const targets = collectTargetsSkippingDangling(hostNode, sourceNode)
     const cohortDuplicated = cohortReferencesPrimitive(
       cohort,
       normalized.sourceNodeId
@@ -409,11 +387,7 @@ function repairCreateSubgraphInput(
   const slot: INodeInputSlot | undefined =
     sourceNode.getSlotFromWidget(sourceWidget)
   if (!slot) {
-    // TODO(adr-0009): When the source widget has no backing input slot,
-    // promotion currently has no canonical path to wire it through a
-    // SubgraphInput without first synthesizing the slot. The wiring slice
-    // (slice 5) will reconcile this — for now we surface a quarantine reason
-    // so the entry is preserved and visible to the user.
+    // TODO(adr-0009): synthesize a backing input slot during the wiring slice.
     console.warn(
       '[proxyWidgetMigration] source widget has no backing input slot; quarantining',
       {
@@ -430,7 +404,6 @@ function repairCreateSubgraphInput(
     sourceWidgetName,
     slotType
   )
-  // Mirror LGraphNode.configure: input.label → widget.label propagation.
   if (slot.label !== undefined) newSubgraphInput.label = slot.label
   const link = newSubgraphInput.connect(slot, sourceNode)
   if (!link) {
@@ -476,6 +449,11 @@ function failPrimitive(message: string, ctx?: unknown): RepairPrimitiveResult {
   return PRIMITIVE_FAILED
 }
 
+function userRenamedTitle(primitiveNode: LGraphNode): string | undefined {
+  const title = primitiveNode.title
+  return title && title !== PRIMITIVE_NODE_TYPE ? title : undefined
+}
+
 function validateCohort(
   cohort: readonly PendingEntry[]
 ): CohortValidationOk | { ok: false } {
@@ -491,7 +469,6 @@ function validateCohort(
       return { ok: false }
     }
   }
-  // Coalesce exact duplicates by `normalized`.
   const uniqueEntries: PendingEntry[] = []
   for (const entry of cohort) {
     if (!uniqueEntries.some((k) => isEqual(k.normalized, entry.normalized))) {
@@ -536,7 +513,7 @@ function repairPrimitive(
     return failPrimitive('node is not a PrimitiveNode', primitiveNode.type)
   }
 
-  const targets = collectTargets(hostNode, primitiveNode)
+  const targets = collectTargetsStrict(hostNode, primitiveNode)
   if (!targets?.length)
     return failPrimitive('no targets to reconnect', validated)
 
@@ -544,7 +521,6 @@ function repairPrimitive(
   if (!primitiveOutput) return failPrimitive('primitive has no output')
   const primitiveOutputType = String(primitiveOutput.type ?? '*')
 
-  // Pre-validate compatibility of every target before mutating.
   for (const target of targets) {
     const targetNode = subgraph.getNodeById(target.targetNodeId)
     if (!targetNode) return failPrimitive('target node missing', target)
@@ -564,12 +540,7 @@ function repairPrimitive(
     }
   }
 
-  // A user-renamed PrimitiveNode title differs from its default
-  // 'PrimitiveNode' label. When unrenamed, fall back to the source widget name.
-  const baseName =
-    primitiveNode.title && primitiveNode.title !== PRIMITIVE_NODE_TYPE
-      ? primitiveNode.title
-      : validated.sourceWidgetName
+  const baseName = userRenamedTitle(primitiveNode) ?? validated.sourceWidgetName
   const snapshot: SnapshotLink[] = (primitiveOutput.links ?? [])
     .map((id) => subgraph.links.get(id))
     .filter((l): l is NonNullable<typeof l> => l !== undefined)
@@ -587,7 +558,6 @@ function repairPrimitive(
       primitiveOutputType
     )
 
-    // Disconnect every former primitive→target link.
     for (const snap of snapshot) {
       const targetNode = subgraph.getNodeById(snap.targetNodeId)
       if (!targetNode)
@@ -597,7 +567,6 @@ function repairPrimitive(
       targetNode.disconnectInput(snap.targetSlot, false)
     }
 
-    // Reconnect each target slot from the new SubgraphInput, in target order.
     for (const target of targets) {
       const targetNode = subgraph.getNodeById(target.targetNodeId)
       if (!targetNode)
@@ -615,8 +584,6 @@ function repairPrimitive(
     return failPrimitive('mutation failed; rolled back', { error: e })
   }
 
-  // Apply value: prefer first non-hole host value across the cohort;
-  // otherwise seed from the primitive's source widget value if present.
   const valueEntry = validated.uniqueEntries.find((e) => !e.isHole)
   if (valueEntry && newSubgraphInput._widget) {
     applyHostValue(newSubgraphInput._widget, valueEntry)
@@ -725,10 +692,6 @@ function appendQuarantine(
   else hostNode.properties[QUARANTINE_PROPERTY] = merged
 }
 
-/**
- * Read the parsed quarantine list from a host SubgraphNode. Returns an empty
- * array when the property is missing or malformed.
- */
 export function readHostQuarantine(
   hostNode: SubgraphNode
 ): ProxyWidgetErrorQuarantineEntry[] {
@@ -743,11 +706,6 @@ interface MakeQuarantineEntryArgs {
   hostValue?: TWidgetValue
 }
 
-/**
- * Construct a quarantine entry pinned to the current schema version. Used by
- * tests and any caller that needs to seed the quarantine list independently of
- * the migration pipeline.
- */
 export function makeQuarantineEntry(
   args: MakeQuarantineEntryArgs
 ): ProxyWidgetErrorQuarantineEntry {
@@ -762,10 +720,6 @@ export function makeQuarantineEntry(
   return entry
 }
 
-/**
- * Append entries to the host quarantine, deduplicating by `originalEntry`.
- * No-op when `entries` is empty.
- */
 export function appendHostQuarantine(
   hostNode: SubgraphNode,
   entries: readonly ProxyWidgetErrorQuarantineEntry[]
