@@ -9,7 +9,6 @@ import {
   LiteGraph,
   SubgraphNode
 } from '@/lib/litegraph/src/litegraph'
-import { setSubgraphMigrationFlushHook } from '@/lib/litegraph/src/subgraph/subgraphMigrationHook'
 import type { TWidgetValue } from '@/lib/litegraph/src/types/widgets'
 import {
   createTestSubgraph,
@@ -20,9 +19,30 @@ import {
 import { flushProxyWidgetMigration as flushProxyWidgetMigrationMerged } from '@/core/graph/subgraph/migration/proxyWidgetMigration'
 import { flushProxyWidgetMigration } from '@/core/graph/subgraph/migration/proxyWidgetMigrationFlush'
 import { readHostQuarantine } from '@/core/graph/subgraph/migration/quarantineEntry'
-import { wireProxyWidgetMigrationFlush } from '@/core/graph/subgraph/migration/wireProxyWidgetMigrationFlush'
 import type { PromotedWidgetView } from '@/core/graph/subgraph/promotedWidgetTypes'
 import { usePreviewExposureStore } from '@/stores/previewExposureStore'
+
+// Local shims for hook-registry symbols removed in the LGraph static-field
+// refactor. Task 1.4 will delete this test file entirely.
+const setSubgraphMigrationFlushHook = (
+  hook:
+    | ((args: {
+        hostNode: SubgraphNode
+        nodeData: { widgets_values?: readonly unknown[] } | undefined
+      }) => void)
+    | undefined
+): void => {
+  LGraph.proxyWidgetMigrationFlush = hook
+    ? (hostNode, nodeData) => hook({ hostNode, nodeData })
+    : undefined
+}
+const wireProxyWidgetMigrationFlush = (): void => {
+  LGraph.proxyWidgetMigrationFlush = (hostNode, nodeData) =>
+    flushProxyWidgetMigrationMerged({
+      hostNode,
+      hostWidgetValues: nodeData?.widgets_values
+    })
+}
 
 vi.mock('@/renderer/core/canvas/canvasStore', () => ({
   useCanvasStore: () => ({})
