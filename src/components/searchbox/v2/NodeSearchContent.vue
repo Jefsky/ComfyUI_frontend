@@ -121,6 +121,7 @@ import NodeSearchInput from '@/components/searchbox/v2/NodeSearchInput.vue'
 import NodeSearchListItem from '@/components/searchbox/v2/NodeSearchListItem.vue'
 import { RootCategory } from '@/components/searchbox/v2/rootCategories'
 import type { RootCategoryId } from '@/components/searchbox/v2/rootCategories'
+import { resolveEssentialsCategory } from '@/services/nodeOrganizationService'
 import { useNodeBookmarkStore } from '@/stores/nodeBookmarkStore'
 import type { ComfyNodeDefImpl } from '@/stores/nodeDefStore'
 import { useNodeDefStore, useNodeFrequencyStore } from '@/stores/nodeDefStore'
@@ -128,11 +129,13 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags'
 import {
   BLUEPRINT_CATEGORY,
   isCustomNode,
-  isEssentialNode,
   NodeSourceType
 } from '@/types/nodeSource'
 import type { FuseFilter, FuseFilterWithValue } from '@/utils/fuseUtil'
 import { cn } from '@comfyorg/tailwind-utils'
+
+const isEssentialNode = (n: ComfyNodeDefImpl) =>
+  resolveEssentialsCategory(n) !== undefined
 
 const sourceCategoryFilters: Record<string, (n: ComfyNodeDefImpl) => boolean> =
   {
@@ -278,7 +281,6 @@ const sidebarCategory = computed({
   }
 })
 
-// Check if any tree category has children (for chevron visibility)
 const anyTreeCategoryHasChildren = computed(() =>
   rootFilteredNodeDefs.value.some((n) => n.category.includes('/'))
 )
