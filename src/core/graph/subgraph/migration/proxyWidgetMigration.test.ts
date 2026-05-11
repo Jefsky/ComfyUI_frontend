@@ -57,12 +57,7 @@ beforeEach(() => {
   LGraph.proxyWidgetMigrationFlush = undefined
 })
 
-// ---------------------------------------------------------------------------
-// Shared host builder. Lifted from the 7 deleted test files (each had its own
-// near-identical copy). Returns the host node along with handles to the inner
-// nodes the test cares about.
-// ---------------------------------------------------------------------------
-
+// Shared host builder used by all tests below.
 function buildHost(): SubgraphNode {
   const subgraph = createTestSubgraph()
   const hostNode = createTestSubgraphNode(subgraph)
@@ -144,19 +139,8 @@ function addPrimitiveWithTargets(
   return { primitive, targets }
 }
 
-// ---------------------------------------------------------------------------
-// describe blocks below; each axis covers a Plan.kind from the merged file.
-// Inventory mapping (deleted title → covered by here):
-//   See the comment block above each describe. Where a deleted test asserted
-//   the same observable side effect as another, only one `it()` survives.
-// ---------------------------------------------------------------------------
-
 describe('flushProxyWidgetMigration', () => {
   describe('no-op cases', () => {
-    // Covers: 'returns an empty result when no proxyWidgets are present'
-    //         (proxyWidgetMigrationFlush.test.ts)
-    //         'returns an empty plan when properties.proxyWidgets is missing'
-    //         (proxyWidgetMigrationPlanner.test.ts)
     it('returns an empty result when no proxyWidgets are present', () => {
       const host = buildHost()
 
@@ -171,8 +155,6 @@ describe('flushProxyWidgetMigration', () => {
       expect(host.properties.proxyWidgets).toBeUndefined()
     })
 
-    // Covers: 'tolerates a malformed proxyWidgets JSON string and returns empty'
-    //         (proxyWidgetMigrationPlanner.test.ts)
     it('tolerates a malformed proxyWidgets payload and returns empty', () => {
       const host = buildHost()
       host.properties.proxyWidgets = '{not json}'
@@ -189,23 +171,6 @@ describe('flushProxyWidgetMigration', () => {
   })
 
   describe('value-widget repair', () => {
-    // ------------------------------------------------------------------
-    // Covers, from repairValueWidget.test.ts:
-    //   - 'hydrates real promoted widget host state without mutating the
-    //      interior widget'  (alreadyLinked, hostValueProvided)
-    //   - 'applies host value to the linked input widget (host wins over
-    //      interior)'        (alreadyLinked, hostValueProvided)
-    //   - 'leaves widget value unchanged when hostValue is HOST_VALUE_HOLE'
-    //                        (alreadyLinked, hostValueHole)
-    //   - 'creates exactly one new SubgraphInput linked to the source widget'
-    //                        (createSubgraphInput, success)
-    // From classifyProxyEntry.test.ts:
-    //   - 'returns alreadyLinked when an input already represents the entry'
-    //   - 'plans a createSubgraphInput when the widget exists and is not linked'
-    // From proxyWidgetMigrationFlush.test.ts:
-    //   - 'counts already-linked entries as repaired and applies the host value'
-    // ------------------------------------------------------------------
-
     it('alreadyLinked: applies host value to the matching promoted widget', () => {
       const host = buildHost()
       const inner = addInnerNode(host, 'Inner', (n) => {
@@ -231,8 +196,6 @@ describe('flushProxyWidgetMigration', () => {
     })
 
     it('alreadyLinked: hydrates real promoted widget without mutating the interior widget', () => {
-      // Variant of the above using the real PromotedWidgetView (rather than a
-      // fromPartial fake), to pin that the interior widget is not mutated.
       const subgraph = createTestSubgraph({
         inputs: [{ name: 'seed', type: 'INT' }]
       })
@@ -283,9 +246,6 @@ describe('flushProxyWidgetMigration', () => {
     })
 
     it('alreadyLinked: ambiguous matching inputs quarantine without applying host value', () => {
-      // Covers classifyProxyEntry.test.ts:
-      //   'quarantines as ambiguous when canonical inputs share the same identity'
-      //   'quarantines ambiguous already-linked inputs without a disambiguator'
       const host = buildHost()
       const inner = addInnerNode(host, 'Inner', (n) => {
         n.addWidget('number', 'seed', 0, () => {})
@@ -341,9 +301,6 @@ describe('flushProxyWidgetMigration', () => {
     })
 
     it('createSubgraphInput: quarantines missingSubgraphInput when source widget has no backing input slot', () => {
-      // The source widget exists but has no INodeInputSlot to wire through.
-      // classify() returns 'createSubgraphInput'; repair surfaces
-      // 'missingSubgraphInput' since there's no slot to bind.
       const host = buildHost()
       const inner = addInnerNode(host, 'Inner', (n) => {
         n.addWidget('number', 'seed', 0, () => {})
@@ -365,23 +322,6 @@ describe('flushProxyWidgetMigration', () => {
   })
 
   describe('primitive fan-out repair', () => {
-    // ------------------------------------------------------------------
-    // Covers, from repairPrimitiveFanout.test.ts:
-    //   - 'repairs 1 primitive fanned out to 3 targets into a single SubgraphInput'
-    //   - 'host value (first by legacyOrderIndex) wins over primitive widget value'
-    //   - 'preserves an explicit undefined host value instead of falling back'
-    //   - 'coalesces duplicate entries that share normalized source'
-    //   - 'returns primitiveBypassFailed when a target slot type is incompatible'
-    //   - 'returns primitiveBypassFailed for an empty cohort' (unreachable via
-    //      flush; classify never emits an empty primitive cohort. Drop.)
-    // From classifyProxyEntry.test.ts:
-    //   - 'quarantines an unlinked primitive node with no fan-out'
-    //   - 'emits primitiveBypass with target list when cohort points at the
-    //      same primitive'
-    // From proxyWidgetMigrationFlush.test.ts (Task 1.3 regression):
-    //   - 'keeps surviving primitive targets when one fan-out link is dangling'
-    // ------------------------------------------------------------------
-
     it('repairs 1 primitive fanned out to 3 targets into a single SubgraphInput', () => {
       const host = buildHost()
       const { primitive, targets } = addPrimitiveWithTargets(host, {
@@ -414,9 +354,7 @@ describe('flushProxyWidgetMigration', () => {
         targetCount: 2
       })
 
-      // Cohort: 2 entries pointing at the same primitive's `value` widget.
-      // With duplicate disambiguators they would still coalesce; we just
-      // pin that the result is one repair, not two.
+      // Two entries point at the same primitive widget; coalesce to one repair.
       host.properties.proxyWidgets = [
         [String(primitive.id), 'value'],
         [String(primitive.id), 'value']
@@ -451,11 +389,6 @@ describe('flushProxyWidgetMigration', () => {
     })
 
     it('seeds value from the primitive widget when no host value is supplied', () => {
-      // The deleted test 'preserves an explicit undefined host value' was a
-      // white-box assertion (it constructed a cohort with `undefined` rather
-      // than HOST_VALUE_HOLE). Through flush, the only observable distinction
-      // is sparse-hole vs supplied: when sparse, fall back to primitive
-      // widget value.
       const host = buildHost()
       const { primitive } = addPrimitiveWithTargets(host, {
         targetCount: 1,
@@ -512,7 +445,6 @@ describe('flushProxyWidgetMigration', () => {
       ])
     })
 
-    // Task 1.3 regression: must survive intact.
     it('keeps surviving primitive targets when one fan-out link is dangling', () => {
       const host = buildHost()
       const { primitive } = addPrimitiveWithTargets(host, { targetCount: 1 })
@@ -529,11 +461,6 @@ describe('flushProxyWidgetMigration', () => {
       host.properties.proxyWidgets = [[String(primitive.id), 'value']]
       const result = flushProxyWidgetMigration({ hostNode: host })
 
-      // Before the Task 1.3 fix the merged classifier collapsed the dangling
-      // link into an empty plan and quarantined as 'unlinkedSourceWidget'.
-      // After the fix the surviving target is shipped through to repair,
-      // which still treats the dangling link as fatal and emits
-      // 'primitiveBypassFailed'.
       expect(result).toMatchObject({ primitiveRepaired: 0, quarantined: 1 })
       expect(readHostQuarantine(host)).toEqual([
         expect.objectContaining({
@@ -545,24 +472,6 @@ describe('flushProxyWidgetMigration', () => {
   })
 
   describe('preview exposure migration', () => {
-    // ------------------------------------------------------------------
-    // Covers, from migratePreviewExposure.test.ts:
-    //   - 'adds an exposure for a $$-prefixed preview source'
-    //   - 'produces a unique name on collision via nextUniqueName'
-    //   - 'reuses an existing exposure for the same source preview'
-    //   - 'returns missingSourceNode when the source node is absent'
-    //   - 'round-trips through resolveChain across an outer host into an
-    //      inner host' — DROPPED. That test exercised the
-    //      previewExposureStore's `resolveChain`, not the migration. The
-    //      migration's only contract is "place an exposure into the store",
-    //      which is already covered by the $$-prefixed case below.
-    // From classifyProxyEntry.test.ts:
-    //   - 'classifies $$-prefixed names as preview exposure'
-    //   - 'classifies type:preview serialize:false widgets as preview exposure'
-    // From proxyWidgetMigrationFlush.test.ts:
-    //   - 'migrates a preview-shaped entry into the PreviewExposureStore'
-    // ------------------------------------------------------------------
-
     it('adds an exposure for a $$-prefixed preview source', () => {
       const host = buildHost()
       const inner = addInnerNode(host, 'Inner', (n) => {
@@ -664,30 +573,6 @@ describe('flushProxyWidgetMigration', () => {
   })
 
   describe('quarantine accumulation', () => {
-    // ------------------------------------------------------------------
-    // Covers, from quarantineEntry.test.ts:
-    //   - 'builds an entry with attemptedAtVersion pinned to 1' — DROPPED;
-    //      that's a constant, not behavior. The version is observable in any
-    //      quarantine assertion below (e.g., the missingSourceNode round-trip).
-    //   - 'includes hostValue when provided'
-    //   - 'returns an empty array for an unconfigured host' (no-op cases above)
-    //   - 'round-trips entries via append + read'
-    //   - 'deduplicates entries with identical originalEntry tuples'
-    //   - 'keeps entries that differ by disambiguator in the originalEntry tuple'
-    //   - 'clearHostQuarantine removes the property entirely' — DROPPED;
-    //      `clearHostQuarantine` was an unused helper after Task 1.2.
-    //   - 'appendHostQuarantine is a no-op when given an empty list' — DROPPED;
-    //      reachable only by deleted helper; the property staying undefined
-    //      after a no-op flush already covers the underlying behavior.
-    // From proxyWidgetMigrationFlush.test.ts:
-    //   - 'quarantines entries whose source node has disappeared'
-    // From classifyProxyEntry.test.ts:
-    //   - 'quarantines when source node is missing'
-    //   - 'quarantines when source widget is missing on the source node'
-    // From proxyWidgetMigrationPlanner.test.ts:
-    //   - 'quarantines entries pointing at missing source nodes'
-    // ------------------------------------------------------------------
-
     it('quarantines entries whose source node has disappeared', () => {
       const host = buildHost()
       host.properties.proxyWidgets = [['9999', 'seed']]
@@ -774,15 +659,6 @@ describe('flushProxyWidgetMigration', () => {
   })
 
   describe('idempotency', () => {
-    // Covers, from proxyWidgetMigrationFlush.test.ts:
-    //   - 'clears properties.proxyWidgets after a successful flush'
-    //   - 're-running flush over a fully migrated host produces no further mutations'
-    //   - 're-running flush over a quarantined host does not duplicate quarantine entries'
-    // From proxyWidgetMigrationPlanner.test.ts:
-    //   - 'is idempotent: re-running on a host whose entries are already
-    //      linked yields alreadyLinked plans' — covered transitively here:
-    //      re-flush returns 0 mutations because proxyWidgets is already gone.
-
     it('clears properties.proxyWidgets after a successful flush', () => {
       const host = buildHost()
       const inner = addInnerNode(host, 'Inner', (n) => {
@@ -831,11 +707,6 @@ describe('flushProxyWidgetMigration', () => {
   })
 
   describe('mixed cohort', () => {
-    // Covers, from proxyWidgetMigrationPlanner.test.ts:
-    //   - 'emits classified entries for a mixed value+preview cohort,
-    //      preserving order'
-    //   - 'preserves sparse holes in widgets_values when they are missing'
-
     it('migrates a mixed value+preview cohort in one flush, preserving entry order', () => {
       const host = buildHost()
       const inner = addInnerNode(host, 'Inner', (n) => {
@@ -873,11 +744,6 @@ describe('flushProxyWidgetMigration', () => {
     })
 
     it('preserves sparse holes when supplied widgets_values is missing an index', () => {
-      // Two value entries; index 0 is a sparse hole, index 1 has a value.
-      // The classifier processes both; both create SubgraphInputs. The host
-      // value at index 1 is observable on the corresponding host promoted
-      // widget; the hole at index 0 is observable as the default widget value
-      // (i.e. no host value applied).
       const host = buildHost()
       const inner = addInnerNode(host, 'Inner', (n) => {
         const slotA = n.addInput('a', 'INT')
@@ -908,8 +774,6 @@ describe('flushProxyWidgetMigration', () => {
   })
 
   describe('integration with LGraph.configure', () => {
-    // Covers proxyWidgetMigrationFlush.test.ts:
-    //   - 'runs through LGraph.configure when the flush hook is wired'
     it('runs through LGraph.configure when the migration hook is wired', () => {
       const host = buildHost()
       const inner = addInnerNode(host, 'Inner', (n) => {
