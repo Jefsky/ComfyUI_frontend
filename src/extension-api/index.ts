@@ -56,11 +56,14 @@ export type {
 // public contract. The barrel re-exports the concrete fns from the service
 // so `import { defineNodeExtension } from '@comfyorg/extension-api'` works
 // at both typecheck and runtime.
+//
+// Note: startExtensionSystem is intentionally NOT exported here — it's an
+// internal boot function, not part of the extension author API. App wiring
+// imports it directly from @/services/extension-api-service.
 export {
   defineExtension,
   defineNodeExtension,
-  defineWidgetExtension,
-  startExtensionSystem
+  defineWidgetExtension
 } from '@/services/extension-api-service'
 
 // ── Implicit-context lifecycle hooks ─────────────────────────────────────────
