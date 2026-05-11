@@ -210,9 +210,34 @@ function collectTargets(
   const targets: PrimitiveBypassTargetRef[] = []
   for (const linkId of linkIds) {
     const link = subgraph.links.get(linkId)
-    // Only the primitive-repair caller treats a missing link as fatal
-    // (returns undefined); the classifier ignores missing links and continues.
+    // Strict semantics: any dangling link aborts the repair-side caller.
     if (!link) return undefined
+    targets.push({
+      targetNodeId: link.target_id,
+      targetSlot: link.target_slot
+    })
+  }
+  return targets
+}
+
+/**
+ * Tolerant variant of {@link collectTargets} for the planner/classifier path.
+ * Skips dangling link IDs and returns whatever surviving targets remain,
+ * matching the behavior of the legacy `classifyProxyEntry.collectPrimitiveTargets`
+ * helper (which the merged file replaced). Repair still uses the strict
+ * {@link collectTargets} so a partial fan-out cannot be silently mutated.
+ */
+function collectTargetsForClassification(
+  hostNode: SubgraphNode,
+  primitiveNode: LGraphNode
+): PrimitiveBypassTargetRef[] {
+  const subgraph = hostNode.subgraph
+  const output = primitiveNode.outputs?.[0]
+  const linkIds = output?.links ?? []
+  const targets: PrimitiveBypassTargetRef[] = []
+  for (const linkId of linkIds) {
+    const link = subgraph.links.get(linkId)
+    if (!link) continue
     targets.push({
       targetNodeId: link.target_id,
       targetSlot: link.target_slot
@@ -258,7 +283,7 @@ function classify(
   }
 
   if (sourceNode.type === PRIMITIVE_NODE_TYPE) {
-    const targets = collectTargets(hostNode, sourceNode) ?? []
+    const targets = collectTargetsForClassification(hostNode, sourceNode)
     const cohortDuplicated = cohortReferencesPrimitive(
       cohort,
       normalized.sourceNodeId
