@@ -10,10 +10,7 @@
  * @packageDocumentation
  */
 
-export type {
-  NodeLocatorId,
-  NodeExecutionId
-} from '@/types/nodeIdentification'
+export type { NodeLocatorId, NodeExecutionId } from '@/types/nodeIdentification'
 
 export {
   isNodeLocatorId,

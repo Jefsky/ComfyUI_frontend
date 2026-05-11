@@ -24,5 +24,7 @@ export interface World {
 }
 
 export function getWorld(): World {
-  throw new Error('[worldInstance] ECS world not yet initialized (Phase A stub)')
+  throw new Error(
+    '[worldInstance] ECS world not yet initialized (Phase A stub)'
+  )
 }

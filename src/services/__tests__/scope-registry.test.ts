@@ -67,7 +67,8 @@ function makeNodeId(n: number): NodeEntityId {
 
 function stubNodeType(nodeEntityId: NodeEntityId, comfyClass = 'TestNode') {
   mockGetComponent.mockImplementation((id, key) => {
-    if (id === nodeEntityId && key?.name === 'NodeType') return { type: comfyClass, comfyClass }
+    if (id === nodeEntityId && key?.name === 'NodeType')
+      return { type: comfyClass, comfyClass }
     return undefined
   })
 }
@@ -132,7 +133,11 @@ describe('scope-registry — D12 copy/paste reset semantics', () => {
 
     it('N pastes from the same source all start at setup-default (no shared state)', () => {
       const SOURCE_ID = makeNodeId(100)
-      const PASTE_IDS = [makeNodeId(101), makeNodeId(102), makeNodeId(103)] as NodeEntityId[]
+      const PASTE_IDS = [
+        makeNodeId(101),
+        makeNodeId(102),
+        makeNodeId(103)
+      ] as NodeEntityId[]
 
       let setupCallCount = 0
 
@@ -235,7 +240,9 @@ describe('currentExtension global slot (D10a) + lifecycle hooks (I-SR.2.B3 / I-S
 
     defineNodeExtension({
       name: 'd-slot-restore',
-      nodeCreated() { /* no-op */ }
+      nodeCreated() {
+        /* no-op */
+      }
     })
 
     stubNodeType(NODE_ID)
@@ -300,7 +307,8 @@ describe('I-SR.6 — scope lifecycle invariants', () => {
     })
 
     mockGetComponent.mockImplementation((id, key) => {
-      if (id === NODE_ID && key?.name === 'NodeType') return { type: 'TestNode', comfyClass: 'TestNode' }
+      if (id === NODE_ID && key?.name === 'NodeType')
+        return { type: 'TestNode', comfyClass: 'TestNode' }
       return undefined
     })
 
@@ -328,7 +336,8 @@ describe('I-SR.6 — scope lifecycle invariants', () => {
     })
 
     mockGetComponent.mockImplementation((id, key) => {
-      if (id === NODE_ID && key?.name === 'NodeType') return { type: 'TestNode', comfyClass: 'TestNode' }
+      if (id === NODE_ID && key?.name === 'NodeType')
+        return { type: 'TestNode', comfyClass: 'TestNode' }
       return undefined
     })
 
@@ -376,7 +385,8 @@ describe('LoadedFromWorkflow tag routes to correct hook (I-SR.3)', () => {
 
     // Stub: no LoadedFromWorkflow component (getComponent returns undefined for it)
     mockGetComponent.mockImplementation((id, key) => {
-      if (id === NODE_ID && key?.name === 'NodeType') return { type: 'TestNode', comfyClass: 'TestNode' }
+      if (id === NODE_ID && key?.name === 'NodeType')
+        return { type: 'TestNode', comfyClass: 'TestNode' }
       return undefined // no LoadedFromWorkflow
     })
 
@@ -398,8 +408,10 @@ describe('LoadedFromWorkflow tag routes to correct hook (I-SR.3)', () => {
     })
 
     mockGetComponent.mockImplementation((id, key) => {
-      if (id === NODE_ID && key?.name === 'NodeType') return { type: 'TestNode', comfyClass: 'TestNode' }
-      if (id === NODE_ID && key?.name === 'LoadedFromWorkflow') return { _tag: 'LoadedFromWorkflow' }
+      if (id === NODE_ID && key?.name === 'NodeType')
+        return { type: 'TestNode', comfyClass: 'TestNode' }
+      if (id === NODE_ID && key?.name === 'LoadedFromWorkflow')
+        return { _tag: 'LoadedFromWorkflow' }
       return undefined
     })
 

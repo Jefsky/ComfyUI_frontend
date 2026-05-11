@@ -16,12 +16,7 @@
  * See research/architecture/scope-registry-spike.md (I-SR.2.B1)
  */
 
-import {
-  EffectScope,
-  onScopeDispose,
-  proxyRefs,
-  watch
-} from 'vue'
+import { EffectScope, onScopeDispose, proxyRefs, watch } from 'vue'
 
 // pauseTracking/resetTracking prevent accidental reactive deps during setup hooks.
 // They are Vue internals not publicly exported. Use no-op shims so this service
@@ -69,28 +64,55 @@ interface NodeTypeData {
   comfyClass: string
   properties?: Record<string, unknown>
 }
-interface LoadedFromWorkflowData { _tag: 'LoadedFromWorkflow' }
-interface PositionData { pos: Point }
-interface DimensionsData { size: Size }
-interface NodeVisualData { title: string; selected?: boolean }
-interface ExecutionData { mode: number }
+interface LoadedFromWorkflowData {
+  _tag: 'LoadedFromWorkflow'
+}
+interface PositionData {
+  pos: Point
+}
+interface DimensionsData {
+  size: Size
+}
+interface NodeVisualData {
+  title: string
+  selected?: boolean
+}
+interface ExecutionData {
+  mode: number
+}
 type SlotEntityId = string & { __brand: 'SlotEntityId' }
 interface ConnectivityData {
   inputSlotIds: SlotEntityId[]
   outputSlotIds: SlotEntityId[]
 }
-interface SlotIdentityData { name: string; type: string }
+interface SlotIdentityData {
+  name: string
+  type: string
+}
 
 const NodeTypeKey = defineComponentKey<NodeTypeData, NodeEntityId>('NodeType')
-const LoadedFromWorkflowKey = defineComponentKey<LoadedFromWorkflowData, NodeEntityId>('LoadedFromWorkflow')
+const LoadedFromWorkflowKey = defineComponentKey<
+  LoadedFromWorkflowData,
+  NodeEntityId
+>('LoadedFromWorkflow')
 const PositionKey = defineComponentKey<PositionData, NodeEntityId>('Position')
-const DimensionsKey = defineComponentKey<DimensionsData, NodeEntityId>('Dimensions')
-const NodeVisualKey = defineComponentKey<NodeVisualData, NodeEntityId>('NodeVisual')
-const ExecutionKey = defineComponentKey<ExecutionData, NodeEntityId>('Execution')
-const ConnectivityKey = defineComponentKey<ConnectivityData, NodeEntityId>('Connectivity')
+const DimensionsKey = defineComponentKey<DimensionsData, NodeEntityId>(
+  'Dimensions'
+)
+const NodeVisualKey = defineComponentKey<NodeVisualData, NodeEntityId>(
+  'NodeVisual'
+)
+const ExecutionKey = defineComponentKey<ExecutionData, NodeEntityId>(
+  'Execution'
+)
+const ConnectivityKey = defineComponentKey<ConnectivityData, NodeEntityId>(
+  'Connectivity'
+)
 // SlotIdentity reads from the slot sub-id space; cast to WidgetEntityId brand for now
 // TODO(#11939): introduce SlotEntityId brand in @/world/entityIds
-const SlotIdentityKey = defineComponentKey<SlotIdentityData, WidgetEntityId>('SlotIdentity')
+const SlotIdentityKey = defineComponentKey<SlotIdentityData, WidgetEntityId>(
+  'SlotIdentity'
+)
 
 // TODO(#11939): replace with real dispatch from @/world/commands
 // _dispatchImpl is reassignable for testing. Do not use outside tests.
@@ -110,8 +132,10 @@ export function _setDispatchImplForTesting(
 function dispatch(_command: Record<string, unknown>): unknown {
   if (_dispatchImpl) return _dispatchImpl(_command)
   if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
-    console.warn('[extension-api] dispatch() is a stub — ECS commands land with PR #11939', _command)
+    console.warn(
+      '[extension-api] dispatch() is a stub — ECS commands land with PR #11939',
+      _command
+    )
   }
   return undefined
 }
@@ -199,36 +223,61 @@ function createWidgetHandle(widgetId: WidgetEntityId): WidgetHandle {
     },
 
     getValue<T = unknown>(): T {
-      return (world.getComponent(widgetId, WidgetComponentValue)?.value ?? undefined) as T
+      return (world.getComponent(widgetId, WidgetComponentValue)?.value ??
+        undefined) as T
     },
     setValue(value: unknown) {
       dispatch({ type: 'SetWidgetValue', widgetId, value })
     },
 
     isHidden() {
-      return world.getComponent(widgetId, WidgetComponentDisplay)?.hidden ?? false
+      return (
+        world.getComponent(widgetId, WidgetComponentDisplay)?.hidden ?? false
+      )
     },
     setHidden(hidden: boolean) {
-      dispatch({ type: 'SetWidgetOption', widgetId, key: 'hidden', value: hidden })
+      dispatch({
+        type: 'SetWidgetOption',
+        widgetId,
+        key: 'hidden',
+        value: hidden
+      })
     },
 
     isDisabled() {
-      return world.getComponent(widgetId, WidgetComponentDisplay)?.disabled ?? false
+      return (
+        world.getComponent(widgetId, WidgetComponentDisplay)?.disabled ?? false
+      )
     },
     setDisabled(disabled: boolean) {
-      dispatch({ type: 'SetWidgetOption', widgetId, key: 'disabled', value: disabled })
+      dispatch({
+        type: 'SetWidgetOption',
+        widgetId,
+        key: 'disabled',
+        value: disabled
+      })
     },
 
     isSerializeEnabled() {
-      return world.getComponent(widgetId, WidgetComponentSerialize)?.serialize ?? true
+      return (
+        world.getComponent(widgetId, WidgetComponentSerialize)?.serialize ??
+        true
+      )
     },
     setSerializeEnabled(enabled: boolean) {
-      dispatch({ type: 'SetWidgetOption', widgetId, key: 'serialize', value: enabled })
+      dispatch({
+        type: 'SetWidgetOption',
+        widgetId,
+        key: 'serialize',
+        value: enabled
+      })
     },
 
     getOption<K = unknown>(key: string): K | undefined {
       const opts = world.getComponent(widgetId, WidgetComponentSchema)?.options
-      return (opts as Record<string, unknown> | undefined)?.[key] as K | undefined
+      return (opts as Record<string, unknown> | undefined)?.[key] as
+        | K
+        | undefined
     },
     setOption(key: string, value: unknown) {
       dispatch({ type: 'SetWidgetOption', widgetId, key, value })
@@ -236,7 +285,12 @@ function createWidgetHandle(widgetId: WidgetEntityId): WidgetHandle {
 
     setHeight(px: number) {
       // TODO(#11939): dispatch ResizeDOMWidget command once ECS DOM widget component lands.
-      dispatch({ type: 'SetWidgetOption', widgetId, key: '__domHeight', value: px })
+      dispatch({
+        type: 'SetWidgetOption',
+        widgetId,
+        key: '__domHeight',
+        value: px
+      })
     },
 
     on: ((event: string, fn: (...args: unknown[]) => unknown): Unsubscribe => {
@@ -248,16 +302,35 @@ function createWidgetHandle(widgetId: WidgetEntityId): WidgetHandle {
       } else if (event === 'optionChange' || event === 'propertyChange') {
         // TODO(#11939): wire through ECS event bus when available
         dispatch({ type: 'SubscribeWidgetEvent', widgetId, event, handler: fn })
-        return () => dispatch({ type: 'UnsubscribeWidgetEvent', widgetId, event, handler: fn })
+        return () =>
+          dispatch({
+            type: 'UnsubscribeWidgetEvent',
+            widgetId,
+            event,
+            handler: fn
+          })
       } else if (event === 'beforeSerialize') {
         dispatch({ type: 'RegisterWidgetSerializer', widgetId, serializer: fn })
-        return () => dispatch({ type: 'UnregisterWidgetSerializer', widgetId, serializer: fn })
+        return () =>
+          dispatch({
+            type: 'UnregisterWidgetSerializer',
+            widgetId,
+            serializer: fn
+          })
       } else if (event === 'beforeQueue') {
-        dispatch({ type: 'RegisterWidgetQueueValidator', widgetId, validator: fn })
-        return () => dispatch({ type: 'UnregisterWidgetQueueValidator', widgetId, validator: fn })
+        dispatch({
+          type: 'RegisterWidgetQueueValidator',
+          widgetId,
+          validator: fn
+        })
+        return () =>
+          dispatch({
+            type: 'UnregisterWidgetQueueValidator',
+            widgetId,
+            validator: fn
+          })
       }
       if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
         console.warn(`[extension-api] Unknown widget event: "${event}"`)
       }
       return () => {}
@@ -369,7 +442,10 @@ function createNodeHandle(nodeId: NodeEntityId): NodeHandle {
     inputs() {
       const conn = world.getComponent(nodeId, ConnectivityKey)
       return (conn?.inputSlotIds ?? []).map((slotId: SlotEntityId) => {
-        const slot = world.getComponent(slotId as unknown as WidgetEntityId, SlotIdentityKey)
+        const slot = world.getComponent(
+          slotId as unknown as WidgetEntityId,
+          SlotIdentityKey
+        )
         return {
           entityId: slotId as unknown as PublicSlotEntityId,
           name: slot?.name ?? '',
@@ -382,7 +458,10 @@ function createNodeHandle(nodeId: NodeEntityId): NodeHandle {
     outputs() {
       const conn = world.getComponent(nodeId, ConnectivityKey)
       return (conn?.outputSlotIds ?? []).map((slotId: SlotEntityId) => {
-        const slot = world.getComponent(slotId as unknown as WidgetEntityId, SlotIdentityKey)
+        const slot = world.getComponent(
+          slotId as unknown as WidgetEntityId,
+          SlotIdentityKey
+        )
         return {
           entityId: slotId as unknown as PublicSlotEntityId,
           name: slot?.name ?? '',
@@ -417,7 +496,8 @@ function createNodeHandle(nodeId: NodeEntityId): NodeHandle {
       ) {
         // TODO(#11939): replace with world.onSystemEvent once World interface gains it
         dispatch({ type: 'SubscribeNodeEvent', nodeId, event, handler: fn })
-        return () => dispatch({ type: 'UnsubscribeNodeEvent', nodeId, event, handler: fn })
+        return () =>
+          dispatch({ type: 'UnsubscribeNodeEvent', nodeId, event, handler: fn })
       } else if (event === 'removed') {
         // onScopeDispose fires when the EffectScope for this extension+node is stopped,
         // which happens in unmountExtensionsForNode — exactly when the node is removed.
@@ -425,7 +505,6 @@ function createNodeHandle(nodeId: NodeEntityId): NodeHandle {
         return () => {} // cleanup handled by scope.stop()
       }
       if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
         console.warn(`[extension-api] Unknown node event: "${event}"`)
       }
       return () => {}
@@ -455,7 +534,7 @@ export function onNodeMounted(fn: () => void): void {
     if (import.meta.env.DEV) {
       throw new Error(
         '[extension-api] onNodeMounted() called outside setup context. ' +
-        'Call it synchronously inside nodeCreated or loadedGraphNode (D10a).'
+          'Call it synchronously inside nodeCreated or loadedGraphNode (D10a).'
       )
     }
     return
@@ -476,7 +555,7 @@ export function onNodeRemoved(fn: () => void): void {
     if (import.meta.env.DEV) {
       throw new Error(
         '[extension-api] onNodeRemoved() called outside setup context. ' +
-        'Call it synchronously inside nodeCreated or loadedGraphNode (D10a).'
+          'Call it synchronously inside nodeCreated or loadedGraphNode (D10a).'
       )
     }
     return
@@ -532,10 +611,13 @@ export function mountExtensionsForNode(nodeEntityId: NodeEntityId): void {
   if (!nodeType) return
 
   const { comfyClass } = nodeType
-  const isLoaded = world.getComponent(nodeEntityId, LoadedFromWorkflowKey) !== undefined
+  const isLoaded =
+    world.getComponent(nodeEntityId, LoadedFromWorkflowKey) !== undefined
 
   // D10b: lexicographic order on extension name as stable tie-break
-  const sorted = [...nodeExtensions].sort((a, b) => a.name.localeCompare(b.name))
+  const sorted = [...nodeExtensions].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  )
 
   for (const ext of sorted) {
     if (ext.nodeTypes && !ext.nodeTypes.includes(comfyClass)) continue
@@ -560,7 +642,6 @@ export function mountExtensionsForNode(nodeEntityId: NodeEntityId): void {
         if (result instanceof Promise) {
           // Async setup is not supported (D10c) — catch to prevent unhandled rejection
           result.catch((err) => {
-            // eslint-disable-next-line no-console
             console.error(
               `[extension-api] Async error in extension "${ext.name}" setup:`,
               err
@@ -569,13 +650,12 @@ export function mountExtensionsForNode(nodeEntityId: NodeEntityId): void {
           if (import.meta.env.DEV) {
             throw new Error(
               `[extension-api] Extension "${ext.name}" returned a Promise from setup. ` +
-              'setup() must be synchronous (D10c).'
+                'setup() must be synchronous (D10c).'
             )
           } else {
-            // eslint-disable-next-line no-console
             console.error(
               `[extension-api] Extension "${ext.name}" returned a Promise from setup — ` +
-              'async setup is not supported (D10c).'
+                'async setup is not supported (D10c).'
             )
           }
         } else if (result && typeof result === 'object') {
@@ -606,7 +686,10 @@ export function unmountExtensionsForNode(nodeEntityId: NodeEntityId): void {
 /**
  * Read-only view of the scope registry — for tests and debug tooling.
  */
-export function getScopeRegistry(): ReadonlyMap<string, Readonly<NodeInstanceScope>> {
+export function getScopeRegistry(): ReadonlyMap<
+  string,
+  Readonly<NodeInstanceScope>
+> {
   return scopeRegistry
 }
 
@@ -623,8 +706,9 @@ let _extensionSystemStarted = false
 export function startExtensionSystem(): void {
   if (_extensionSystemStarted) {
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.warn('[extension-api] startExtensionSystem() called multiple times')
+      console.warn(
+        '[extension-api] startExtensionSystem() called multiple times'
+      )
     }
     return
   }
@@ -672,7 +756,6 @@ export async function invokeV2AppExtensions(
     try {
       await fn()
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error(
         `[extension-api] Error in v2 extension "${ext.name}" ${hook}():`,
         err

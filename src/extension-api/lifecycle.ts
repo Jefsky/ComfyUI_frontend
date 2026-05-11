@@ -318,5 +318,5 @@ export {
    * }
    * ```
    */
-  onNodeRemoved,
+  onNodeRemoved
 } from '@/services/extension-api-service'

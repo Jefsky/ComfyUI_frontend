@@ -19,12 +19,6 @@ export type {
   NodeHandle
 } from '@/extension-api'
 
-export type {
-  NodeExtensionOptions,
-  ExtensionOptions
-} from '@/extension-api'
+export type { NodeExtensionOptions, ExtensionOptions } from '@/extension-api'
 
-export {
-  defineNodeExtension,
-  defineExtension
-} from '@/extension-api'
+export { defineNodeExtension, defineExtension } from '@/extension-api'

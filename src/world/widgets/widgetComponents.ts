@@ -23,8 +23,23 @@ interface WidgetValueData {
   value?: unknown
 }
 
-export const WidgetComponentContainer = defineComponentKey<WidgetContainerData, NodeEntityId>('WidgetComponentContainer')
-export const WidgetComponentDisplay = defineComponentKey<WidgetDisplayData, WidgetEntityId>('WidgetComponentDisplay')
-export const WidgetComponentSchema = defineComponentKey<WidgetSchemaData, WidgetEntityId>('WidgetComponentSchema')
-export const WidgetComponentSerialize = defineComponentKey<WidgetSerializeData, WidgetEntityId>('WidgetComponentSerialize')
-export const WidgetComponentValue = defineComponentKey<WidgetValueData, WidgetEntityId>('WidgetComponentValue')
+export const WidgetComponentContainer = defineComponentKey<
+  WidgetContainerData,
+  NodeEntityId
+>('WidgetComponentContainer')
+export const WidgetComponentDisplay = defineComponentKey<
+  WidgetDisplayData,
+  WidgetEntityId
+>('WidgetComponentDisplay')
+export const WidgetComponentSchema = defineComponentKey<
+  WidgetSchemaData,
+  WidgetEntityId
+>('WidgetComponentSchema')
+export const WidgetComponentSerialize = defineComponentKey<
+  WidgetSerializeData,
+  WidgetEntityId
+>('WidgetComponentSerialize')
+export const WidgetComponentValue = defineComponentKey<
+  WidgetValueData,
+  WidgetEntityId
+>('WidgetComponentValue')
