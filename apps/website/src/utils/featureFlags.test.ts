@@ -13,6 +13,7 @@ import {
 } from './featureFlags'
 
 const BASE_URL = 'https://api.test'
+const tempSnapshotDirs: string[] = []
 
 function response(body: unknown, init: Partial<ResponseInit> = {}): Response {
   const base: ResponseInit = {
@@ -31,6 +32,7 @@ function makeSnapshot(cloudFreeTier: boolean): FeatureFlagsSnapshot {
 
 function withSnapshotDir(snapshot: FeatureFlagsSnapshot | null): URL {
   const dir = mkdtempSync(join(tmpdir(), 'feature-flags-test-'))
+  tempSnapshotDirs.push(dir)
   const file = join(dir, 'feature-flags.snapshot.json')
   if (snapshot) writeFileSync(file, JSON.stringify(snapshot))
   return pathToFileURL(file)
@@ -42,6 +44,9 @@ describe('fetchFeatureFlagsForBuild', () => {
   })
 
   afterEach(() => {
+    for (const dir of tempSnapshotDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
     vi.restoreAllMocks()
   })
 
@@ -101,7 +106,6 @@ describe('fetchFeatureFlagsForBuild', () => {
     expect(outcome.reason).toMatch(/^HTTP 401/)
     expect(outcome.snapshot.flags.cloudFreeTier).toBe(true)
     expect(fetchImpl).toHaveBeenCalledTimes(1)
-    rmSync(new URL('.', snapshotUrl), { recursive: true, force: true })
   })
 
   it('retries 5xx up to the configured limit then falls back to snapshot', async () => {
@@ -118,7 +122,6 @@ describe('fetchFeatureFlagsForBuild', () => {
     expect(outcome.status).toBe('stale')
     expect(fetchImpl).toHaveBeenCalledTimes(4)
     expect(sleep).toHaveBeenCalledTimes(3)
-    rmSync(new URL('.', snapshotUrl), { recursive: true, force: true })
   })
 
   it('falls back to snapshot on schema validation failure', async () => {
@@ -134,7 +137,6 @@ describe('fetchFeatureFlagsForBuild', () => {
     expect(outcome.status).toBe('stale')
     if (outcome.status !== 'stale') return
     expect(outcome.reason).toMatch(/^schema validation/)
-    rmSync(new URL('.', snapshotUrl), { recursive: true, force: true })
   })
 
   it('falls back to the bundled snapshot when fetch fails and the override is missing', async () => {
@@ -184,6 +186,5 @@ describe('fetchFeatureFlagsForBuild', () => {
     })
     const after = fs.readFileSync(snapshotUrl).toString()
     expect(after).toBe(initial)
-    rmSync(new URL('.', snapshotUrl), { recursive: true, force: true })
   })
 })

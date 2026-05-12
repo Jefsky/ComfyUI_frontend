@@ -21,9 +21,11 @@ export function reportFeatureFlagsOutcome(outcome: FetchOutcome): void {
   if (summaryPath) {
     try {
       appendFileSync(summaryPath, buildStepSummary(outcome))
-    } catch {
-      // Writing the summary is best-effort; do not fail the build if the
-      // runner's summary file is unavailable (e.g. local dev).
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      process.stderr.write(
+        `feature-flags reporter: failed to write GITHUB_STEP_SUMMARY: ${message}\n`
+      )
     }
   }
 }
