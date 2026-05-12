@@ -43,7 +43,7 @@ const freeTierPlan: PricingPlan = {
   ]
 }
 
-export function buildStandardPlans(
+export function buildPricingPlans(
   enterpriseRoute: string,
   cloudFreeTier: boolean = featureFlags.cloudFreeTier
 ): PricingPlan[] {
@@ -112,5 +112,9 @@ export function buildStandardPlans(
 }
 
 export function gridColsClass(standardPlanCount: number): string {
-  return standardPlanCount === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+  if (standardPlanCount === 4) return 'lg:grid-cols-4'
+  if (standardPlanCount === 3) return 'lg:grid-cols-3'
+  throw new Error(
+    `gridColsClass: unsupported standardPlanCount ${standardPlanCount}; only 3 or 4 are supported. Update pricing layout in PriceSection.vue if a new tier is added.`
+  )
 }

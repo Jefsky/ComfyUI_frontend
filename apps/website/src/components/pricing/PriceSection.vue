@@ -7,13 +7,13 @@ import { ref } from 'vue'
 import BrandButton from '../common/BrandButton.vue'
 import PricingPlanFeatureList from './PricingPlanFeatureList.vue'
 import PricingTierCard from './PricingTierCard.vue'
-import { buildStandardPlans, gridColsClass } from './pricingPlans'
+import { buildPricingPlans, gridColsClass } from './pricingPlans'
 import { getRoutes } from '../../config/routes'
 import { t } from '../../i18n/translations'
 
 const { locale = 'en' } = defineProps<{ locale?: Locale }>()
 
-const plans = buildStandardPlans(getRoutes(locale).cloudEnterprise)
+const plans = buildPricingPlans(getRoutes(locale).cloudEnterprise)
 const standardPlans = plans.filter((p) => !p.isEnterprise)
 const enterprisePlan = plans.find((p) => p.isEnterprise)!
 

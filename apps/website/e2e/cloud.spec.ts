@@ -21,7 +21,9 @@ test.describe('Cloud page @smoke', () => {
   })
 
   test('HeroSection has CTA button linking to cloud', async ({ page }) => {
-    const cta = page.getByRole('link', { name: /TRY COMFY CLOUD FOR FREE/i })
+    const cta = page.getByRole('link', {
+      name: /^TRY COMFY CLOUD( FOR FREE)?$/i
+    })
     await expect(cta).toBeVisible()
   })
 
