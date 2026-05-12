@@ -137,7 +137,7 @@ describe('fetchFeatureFlagsForBuild', () => {
     rmSync(new URL('.', snapshotUrl), { recursive: true, force: true })
   })
 
-  it('returns failed when both fetch and snapshot fail', async () => {
+  it('falls back to the bundled snapshot when fetch fails and the override is missing', async () => {
     const snapshotUrl = withSnapshotDir(null)
     const fetchImpl = vi.fn(async () => response({}, { status: 500 }))
     const sleep = vi.fn(async () => undefined)
@@ -148,7 +148,9 @@ describe('fetchFeatureFlagsForBuild', () => {
       sleep,
       fetchImpl: fetchImpl as unknown as typeof fetch
     })
-    expect(outcome.status).toBe('failed')
+    expect(outcome.status).toBe('stale')
+    if (outcome.status !== 'stale') return
+    expect(outcome.snapshot.flags.cloudFreeTier).toBe(false)
   })
 
   it('memoizes within a single process', async () => {

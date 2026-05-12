@@ -161,17 +161,16 @@ function deriveFlags(
 async function readSnapshot(
   snapshotUrl: URL | undefined
 ): Promise<FeatureFlagsSnapshot | null> {
-  if (!snapshotUrl) {
-    return isFeatureFlagsSnapshot(bundledSnapshot) ? bundledSnapshot : null
+  if (snapshotUrl) {
+    try {
+      const text = await readFile(snapshotUrl, 'utf8')
+      const parsed: unknown = JSON.parse(text)
+      if (isFeatureFlagsSnapshot(parsed)) return parsed
+    } catch {
+      // Fall through to the bundled snapshot if the override is unreadable.
+    }
   }
-  try {
-    const text = await readFile(snapshotUrl, 'utf8')
-    const parsed: unknown = JSON.parse(text)
-    if (isFeatureFlagsSnapshot(parsed)) return parsed
-    return null
-  } catch {
-    return null
-  }
+  return isFeatureFlagsSnapshot(bundledSnapshot) ? bundledSnapshot : null
 }
 
 function isFeatureFlagsSnapshot(value: unknown): value is FeatureFlagsSnapshot {

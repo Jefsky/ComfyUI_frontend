@@ -52,7 +52,7 @@ function staleAnnotation(reason: string): string {
 }
 
 function escapeAnnotation(value: string): string {
-  return value.replace(/\r?\n/g, '%0A').replace(/\r/g, '%0D')
+  return value.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')
 }
 
 function buildStepSummary(outcome: FetchOutcome): string {
