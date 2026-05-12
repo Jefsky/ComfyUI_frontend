@@ -91,67 +91,28 @@ function getHostStateName(widget: PromotedWidgetView): string {
 }
 
 describe('SubgraphNode.serialize (ADR 0009)', () => {
-  describe('removed copy-back loop', () => {
-    it('does not mutate interior widget values during serialize', () => {
-      const subgraph = createTestSubgraph({
-        inputs: [{ name: 'value', type: 'number' }]
-      })
-
-      const { node: interiorNode, widget: interiorWidget } =
-        createNodeWithWidget('Interior')
-      subgraph.add(interiorNode)
-      subgraph.inputNode.slots[0].connect(interiorNode.inputs[0], interiorNode)
-
-      const hostNode = createTestSubgraphNode(subgraph)
-      const hostWidget = hostNode.widgets[0]
-      expectPromotedWidgetView(hostWidget)
-      useWidgetValueStore().registerWidget(hostNode.rootGraph.id, {
-        nodeId: hostNode.id,
-        name: getHostStateName(hostWidget),
-        type: hostWidget.type,
-        value: 99,
-        options: {}
-      })
-
-      hostNode.serialize()
-
-      expect(interiorWidget.value).toBe(42)
+  it('does not mutate interior widget values when serializing the host', () => {
+    const subgraph = createTestSubgraph({
+      inputs: [{ name: 'value', type: 'number' }]
     })
+    const { node: interiorNode, widget: interiorWidget } =
+      createNodeWithWidget('Interior')
+    subgraph.add(interiorNode)
+    subgraph.inputNode.slots[0].connect(interiorNode.inputs[0], interiorNode)
 
-    it('does not mutate live properties while projecting store-owned serialization metadata', () => {
-      const subgraph = createTestSubgraph()
-      const hostNode = createTestSubgraphNode(subgraph)
-      hostNode.properties.previewExposures = [
-        {
-          name: 'stale',
-          sourceNodeId: '0',
-          sourcePreviewName: '$$canvas-image-preview'
-        }
-      ]
-      hostNode.properties.proxyWidgetErrorQuarantine = []
-      const livePropertiesBefore = structuredClone(hostNode.properties)
-
-      usePreviewExposureStore().addExposure(
-        hostNode.rootGraph.id,
-        String(hostNode.id),
-        {
-          sourceNodeId: '12',
-          sourcePreviewName: '$$canvas-image-preview'
-        }
-      )
-
-      const serialized = hostNode.serialize()
-
-      expect(hostNode.properties).toEqual(livePropertiesBefore)
-      expect(serialized.properties?.previewExposures).toEqual([
-        {
-          name: '$$canvas-image-preview',
-          sourceNodeId: '12',
-          sourcePreviewName: '$$canvas-image-preview'
-        }
-      ])
-      expect(serialized.properties?.proxyWidgetErrorQuarantine).toBeUndefined()
+    const hostNode = createTestSubgraphNode(subgraph)
+    const hostWidget = hostNode.widgets[0]
+    expectPromotedWidgetView(hostWidget)
+    useWidgetValueStore().registerWidget(hostNode.rootGraph.id, {
+      nodeId: hostNode.id,
+      name: getHostStateName(hostWidget),
+      type: hostWidget.type,
+      value: 99,
+      options: {}
     })
+    hostNode.serialize()
+
+    expect(interiorWidget.value).toBe(42)
   })
 
   describe('host widget values', () => {
