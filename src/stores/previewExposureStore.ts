@@ -14,7 +14,7 @@ const EMPTY_EXPOSURES: readonly PreviewExposure[] = Object.freeze([])
  * Optional resolver passed by callers that want {@link resolveChain} to walk
  * nested subgraph host boundaries.
  */
-export type ResolveNestedHostFn = NonNullable<
+type ResolveNestedHostFn = NonNullable<
   PreviewExposureChainContext['resolveNestedHost']
 >
 
