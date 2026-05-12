@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Website Feature Flags",
+  "description": "Build-time feature flags for the comfy.org website. Imported as a JSON module and bundled at build. Mirrors a subset of the main Vue app's remoteConfig flags so the two systems can be unified later.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["cloudFreeTier"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "cloudFreeTier": {
+      "type": "boolean",
+      "description": "When true, render the Cloud free tier card on /cloud/pricing, the 'TRY COMFY CLOUD FOR FREE' CTA, the 'Start free.' tagline, and the 'Is it really free?' FAQ. When false, all free-tier surfaces are hidden. Mirrors remoteConfig.new_free_tier_subscriptions in the main Vue app."
+    }
+  }
+}

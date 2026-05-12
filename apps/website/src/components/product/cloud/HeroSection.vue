@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import type { Locale } from '../../../i18n/translations'
 
+import { featureFlags } from '../../../config/featureFlags'
 import { externalLinks } from '../../../config/routes'
 import { t } from '../../../i18n/translations'
 import BrandButton from '../../common/BrandButton.vue'
 import ProductHeroBadge from '../../common/ProductHeroBadge.vue'
 
 const { locale = 'en' } = defineProps<{ locale?: Locale }>()
+
+const ctaKey = featureFlags.cloudFreeTier
+  ? ('cloud.hero.cta' as const)
+  : ('cloud.hero.ctaNoFreeTier' as const)
 </script>
 
 <template>
@@ -401,7 +406,7 @@ const { locale = 'en' } = defineProps<{ locale?: Locale }>()
           size="lg"
           class="text-center lg:min-w-60 lg:p-4"
         >
-          {{ t('cloud.hero.cta', locale) }}
+          {{ t(ctaKey, locale) }}
         </BrandButton>
       </div>
     </div>

@@ -10,21 +10,27 @@ const {
   locale = 'en',
   headingKey,
   faqPrefix,
-  faqCount
+  faqCount,
+  skipIndices = []
 } = defineProps<{
   locale?: Locale
   headingKey: TranslationKey
   faqPrefix: string
   faqCount: number
+  skipIndices?: readonly number[]
 }>()
+
+const skipped = new Set(skipIndices)
 
 const faqKeys: Array<{ q: TranslationKey; a: TranslationKey }> = Array.from(
   { length: faqCount },
-  (_, i) => ({
-    q: `${faqPrefix}.${i + 1}.q` as TranslationKey,
-    a: `${faqPrefix}.${i + 1}.a` as TranslationKey
-  })
+  (_, i) => i + 1
 )
+  .filter((index) => !skipped.has(index))
+  .map((index) => ({
+    q: `${faqPrefix}.${index}.q` as TranslationKey,
+    a: `${faqPrefix}.${index}.a` as TranslationKey
+  }))
 
 const faqs = computed(() =>
   faqKeys.map(({ q, a }) => ({

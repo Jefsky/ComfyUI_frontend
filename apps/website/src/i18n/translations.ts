@@ -734,6 +734,10 @@ const translations = {
     en: 'TRY COMFY CLOUD FOR FREE',
     'zh-CN': '免费试用 COMFY CLOUD'
   },
+  'cloud.hero.ctaNoFreeTier': {
+    en: 'TRY COMFY CLOUD',
+    'zh-CN': '试用 COMFY CLOUD'
+  },
 
   // Cloud – ReasonSection
   'cloud.reason.heading': {
@@ -876,6 +880,11 @@ const translations = {
     en: 'One balance for Cloud GPU time and Partner Node API models. Build and edit workflows for free — credits are consumed only when the GPU runs.',
     'zh-CN':
       '一个余额即可使用云端 GPU 算力和合作伙伴节点 API 模型。免费构建和编辑工作流——仅在 GPU 运行时消耗积分。'
+  },
+  'cloud.pricing.descriptionNoFreeTier': {
+    en: 'One balance for Cloud GPU time and Partner Node API models. Credits are consumed only when the GPU runs.',
+    'zh-CN':
+      '一个余额即可使用云端 GPU 算力和合作伙伴节点 API 模型——仅在 GPU 运行时消耗积分。'
   },
   'cloud.pricing.tagline': {
     en: "Start free. Upgrade when you're ready.",
@@ -1079,6 +1088,10 @@ const translations = {
   'pricing.plan.standard.cta': {
     en: 'SUBSCRIBE TO STANDARD',
     'zh-CN': '订阅标准版'
+  },
+  'pricing.plan.standard.featureIntroNoFreeTier': {
+    en: 'Get started with:',
+    'zh-CN': '快速开始：'
   },
   'pricing.plan.standard.featureIntro': {
     en: 'Everything in Free, plus:',

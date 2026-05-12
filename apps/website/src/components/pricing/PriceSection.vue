@@ -7,6 +7,7 @@ import { ref } from 'vue'
 import BrandButton from '../common/BrandButton.vue'
 import PricingPlanFeatureList from './PricingPlanFeatureList.vue'
 import PricingTierCard from './PricingTierCard.vue'
+import { featureFlags } from '../../config/featureFlags'
 import { externalLinks, getRoutes } from '../../config/routes'
 import { t } from '../../i18n/translations'
 
@@ -37,21 +38,27 @@ interface PricingPlan {
   isEnterprise?: boolean
 }
 
+const freeTierPlan: PricingPlan = {
+  id: 'free',
+  labelKey: 'pricing.plan.free.label',
+  summaryKey: 'pricing.plan.free.summary',
+  priceKey: 'pricing.plan.free.price',
+  creditsKey: 'pricing.plan.free.credits',
+  estimateKey: 'pricing.plan.free.estimate',
+  ctaKey: 'pricing.plan.free.cta',
+  ctaHref: externalLinks.cloud,
+  features: [
+    { text: 'pricing.plan.free.feature1' },
+    { text: 'pricing.plan.free.feature2' }
+  ]
+}
+
+const standardFeatureIntroKey: TranslationKey = featureFlags.cloudFreeTier
+  ? 'pricing.plan.standard.featureIntro'
+  : 'pricing.plan.standard.featureIntroNoFreeTier'
+
 const plans: PricingPlan[] = [
-  {
-    id: 'free',
-    labelKey: 'pricing.plan.free.label',
-    summaryKey: 'pricing.plan.free.summary',
-    priceKey: 'pricing.plan.free.price',
-    creditsKey: 'pricing.plan.free.credits',
-    estimateKey: 'pricing.plan.free.estimate',
-    ctaKey: 'pricing.plan.free.cta',
-    ctaHref: externalLinks.cloud,
-    features: [
-      { text: 'pricing.plan.free.feature1' },
-      { text: 'pricing.plan.free.feature2' }
-    ]
-  },
+  ...(featureFlags.cloudFreeTier ? [freeTierPlan] : []),
   {
     id: 'standard',
     labelKey: 'pricing.plan.standard.label',
@@ -61,7 +68,7 @@ const plans: PricingPlan[] = [
     estimateKey: 'pricing.plan.standard.estimate',
     ctaKey: 'pricing.plan.standard.cta',
     ctaHref: subscribeUrl('standard'),
-    featureIntroKey: 'pricing.plan.standard.featureIntro',
+    featureIntroKey: standardFeatureIntroKey,
     features: [
       { text: 'pricing.plan.standard.feature1' },
       { text: 'pricing.plan.standard.feature2' }

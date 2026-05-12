@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import type { Locale } from '../../../i18n/translations'
 
+import { featureFlags } from '../../../config/featureFlags'
 import { getRoutes } from '../../../config/routes'
 import { t } from '../../../i18n/translations'
 
 const { locale = 'en' } = defineProps<{ locale?: Locale }>()
+
+const descriptionKey = featureFlags.cloudFreeTier
+  ? ('cloud.pricing.description' as const)
+  : ('cloud.pricing.descriptionNoFreeTier' as const)
 </script>
 
 <template>
@@ -22,10 +27,13 @@ const { locale = 'en' } = defineProps<{ locale?: Locale }>()
         </h2>
 
         <p class="text-primary-comfy-ink mt-4 text-base">
-          {{ t('cloud.pricing.description', locale) }}
+          {{ t(descriptionKey, locale) }}
         </p>
 
-        <p class="text-primary-comfy-ink mt-4 text-base font-bold">
+        <p
+          v-if="featureFlags.cloudFreeTier"
+          class="text-primary-comfy-ink mt-4 text-base font-bold"
+        >
           {{ t('cloud.pricing.tagline', locale) }}
         </p>
       </div>
