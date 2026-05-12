@@ -24,7 +24,9 @@ interface PricingPlan {
   isEnterprise?: boolean
 }
 
-function subscribeUrl(tier: string): string {
+type PaidTierId = 'standard' | 'creator' | 'pro'
+
+function subscribeUrl(tier: PaidTierId): string {
   return `${externalLinks.cloud}/cloud/subscribe?tier=${tier}&cycle=monthly`
 }
 
