@@ -1,10 +1,20 @@
 import type { PreviewExposure } from '@/core/schemas/previewExposureSchema'
 import type { UUID } from '@/lib/litegraph/src/utils/uuid'
 
-import type {
-  ResolvedPreviewChain,
-  ResolvedPreviewChainStep
-} from './previewExposureTypes'
+export interface ResolvedPreviewChainStep {
+  rootGraphId: UUID
+  hostNodeLocator: string
+  exposure: PreviewExposure
+}
+
+export interface ResolvedPreviewChain {
+  steps: readonly ResolvedPreviewChainStep[]
+  leaf: {
+    rootGraphId: UUID
+    sourceNodeId: string
+    sourcePreviewName: string
+  }
+}
 
 /**
  * Lookup callbacks the chain walker needs to follow nested-host boundaries.
