@@ -9,7 +9,7 @@
     "$schema": { "type": "string" },
     "cloudFreeTier": {
       "type": "boolean",
-      "description": "When true, render the Cloud free tier card on /cloud/pricing, the 'TRY COMFY CLOUD FOR FREE' CTA, the 'Start free.' tagline, and the 'Is it really free?' FAQ. When false, all free-tier surfaces are hidden. Mirrors remoteConfig.new_free_tier_subscriptions in the main Vue app."
+      "description": "When true, render the Cloud free tier card on /cloud/pricing, the 'TRY COMFY CLOUD FOR FREE' hero CTA on /cloud, the 'Start free. Upgrade when you're ready.' tagline on the /cloud pricing teaser, and the 'Build and edit workflows for free' phrasing in the pricing description. When false, all of those free-tier surfaces are hidden and replaced with neutral copy. Mirrors remoteConfig.new_free_tier_subscriptions in the main Vue app."
     }
   }
 }
