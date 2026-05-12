@@ -155,6 +155,362 @@ describe('SubgraphNode.serialize (ADR 0009)', () => {
   })
 
   describe('host widget values', () => {
+    type SourceSpec = {
+      inputName: string
+      title: string
+      widgetType: TWidgetType
+      slotType: ISlotType
+      initialValue: unknown
+      withComfyClass?: boolean
+      hugeMaxSeed?: boolean
+    }
+    type EditValue = string | number | boolean
+    type EditSpec = { via: 'viewKey' | 'vue'; index: number; value: EditValue }
+    type ReorderSpec =
+      | { kind: 'none' }
+      | { kind: 'byName'; order: string[] }
+      | { kind: 'atIndex'; from: number; to: number }
+
+    const TEXT_PAIR: SourceSpec[] = [
+      {
+        inputName: 'first',
+        title: 'First',
+        widgetType: 'text',
+        slotType: 'STRING',
+        initialValue: '',
+        withComfyClass: true
+      },
+      {
+        inputName: 'second',
+        title: 'Second',
+        widgetType: 'text',
+        slotType: 'STRING',
+        initialValue: '',
+        withComfyClass: true
+      }
+    ]
+    const NUMBER_PAIR: SourceSpec[] = [
+      {
+        inputName: 'first',
+        title: 'First',
+        widgetType: 'number',
+        slotType: 'number',
+        initialValue: 1
+      },
+      {
+        inputName: 'second',
+        title: 'Second',
+        widgetType: 'number',
+        slotType: 'number',
+        initialValue: 2
+      }
+    ]
+    const TEXT_TEXT_SEED: SourceSpec[] = [
+      {
+        inputName: 'text_1',
+        title: 'Positive',
+        widgetType: 'text',
+        slotType: 'STRING',
+        initialValue: '',
+        withComfyClass: true
+      },
+      {
+        inputName: 'text',
+        title: 'Negative',
+        widgetType: 'text',
+        slotType: 'STRING',
+        initialValue: '',
+        withComfyClass: true
+      },
+      {
+        inputName: 'seed',
+        title: 'Sampler',
+        widgetType: 'number',
+        slotType: 'INT',
+        initialValue: 0,
+        withComfyClass: true
+      }
+    ]
+
+    function buildSources(
+      subgraph: ReturnType<typeof createTestSubgraph>,
+      specs: SourceSpec[]
+    ) {
+      const built = specs.map((s) => {
+        const created = createNodeWithWidget(
+          s.title,
+          s.widgetType,
+          s.initialValue,
+          s.slotType
+        )
+        if (s.withComfyClass) created.node.comfyClass = s.title
+        if (s.hugeMaxSeed) created.widget.options.max = 1125899906842624
+        subgraph.add(created.node)
+        return created
+      })
+      for (const [i, s] of specs.entries()) {
+        subgraph
+          .addInput(s.inputName, String(s.slotType))
+          .connect(built[i].input, built[i].node)
+      }
+      return built
+    }
+
+    function vueEdit(
+      host: ReturnType<typeof createTestSubgraphNode>,
+      index: number,
+      value: EditValue
+    ) {
+      const widgets = computeProcessedWidgets({
+        nodeData: extractVueNodeData(host),
+        graphId: host.rootGraph.id,
+        showAdvanced: false,
+        isGraphReady: false,
+        rootGraph: null,
+        ui: { getTooltipConfig: () => ({}), handleNodeRightClick: () => {} }
+      })
+      widgets[index].updateHandler(value)
+    }
+
+    function applyEdit(
+      host: ReturnType<typeof createTestSubgraphNode>,
+      edit: EditSpec
+    ) {
+      if (edit.via === 'viewKey') host.widgets[edit.index].value = edit.value
+      else vueEdit(host, edit.index, edit.value)
+    }
+
+    function applyReorder(
+      host: ReturnType<typeof createTestSubgraphNode>,
+      r: ReorderSpec
+    ) {
+      if (r.kind === 'byName') reorderSubgraphInputsByName(host, r.order)
+      else if (r.kind === 'atIndex')
+        reorderSubgraphInputAtIndex(host, r.from, r.to)
+    }
+
+    function makeControlWidget(value: 'increment' | 'fixed', marker: boolean) {
+      const base = {
+        name: 'control_after_generate',
+        value,
+        serialize: false,
+        beforeQueued: () => {},
+        afterQueued: () => {}
+      }
+      return marker ? { ...base, [IS_CONTROL_WIDGET]: true } : base
+    }
+
+    type ReorderCase = {
+      name: string
+      sources: SourceSpec[]
+      edits: EditSpec[]
+      reorder: ReorderSpec
+      expectedNames?: string[]
+      expectedWidgetsValues?: unknown[]
+      promptByIndex?: Record<number, unknown>
+    }
+
+    const reorderCases: ReorderCase[] = [
+      {
+        name: 'plain numbers via ViewKey, swap by name',
+        sources: NUMBER_PAIR,
+        edits: [
+          { via: 'viewKey', index: 0, value: 111 },
+          { via: 'viewKey', index: 1, value: 222 }
+        ],
+        reorder: { kind: 'byName', order: ['second', 'first'] },
+        expectedNames: ['second', 'first'],
+        expectedWidgetsValues: [222, 111]
+      },
+      {
+        name: 'plain text via Vue, swap by name (widgets_values + prompt)',
+        sources: TEXT_PAIR,
+        edits: [
+          { via: 'vue', index: 0, value: 'first value' },
+          { via: 'vue', index: 1, value: 'second value' }
+        ],
+        reorder: { kind: 'byName', order: ['second', 'first'] },
+        expectedWidgetsValues: ['second value', 'first value'],
+        promptByIndex: { 0: 'first value', 1: 'second value' }
+      },
+      {
+        name: 'mixed text/text/seed via ViewKey, atIndex seed up',
+        sources: TEXT_TEXT_SEED,
+        edits: [
+          { via: 'viewKey', index: 0, value: 'positive prompt' },
+          { via: 'viewKey', index: 1, value: 'negative prompt' },
+          { via: 'viewKey', index: 2, value: 123456 }
+        ],
+        reorder: { kind: 'atIndex', from: 2, to: 1 },
+        expectedWidgetsValues: ['positive prompt', 123456, 'negative prompt'],
+        promptByIndex: { 0: 'positive prompt', 1: 'negative prompt', 2: 123456 }
+      },
+      {
+        name: 'mixed text/text/seed via Vue, atIndex seed up',
+        sources: TEXT_TEXT_SEED,
+        edits: [
+          { via: 'vue', index: 0, value: 'positive prompt' },
+          { via: 'vue', index: 1, value: 'negative prompt' },
+          { via: 'vue', index: 2, value: 123456 }
+        ],
+        reorder: { kind: 'atIndex', from: 2, to: 1 },
+        expectedWidgetsValues: ['positive prompt', 123456, 'negative prompt'],
+        promptByIndex: { 0: 'positive prompt', 1: 'negative prompt', 2: 123456 }
+      }
+    ]
+
+    it.each(reorderCases)('$name', async (c) => {
+      const subgraph = createTestSubgraph()
+      const sources = buildSources(subgraph, c.sources)
+      const host = createTestSubgraphNode(subgraph)
+      if (c.promptByIndex) {
+        host.comfyClass = 'Subgraph'
+        host.graph?.add(host)
+      }
+      for (const edit of c.edits) applyEdit(host, edit)
+      applyReorder(host, c.reorder)
+
+      if (c.expectedNames) {
+        expect(host.widgets.map((w) => w.name)).toEqual(c.expectedNames)
+      }
+      if (c.expectedWidgetsValues !== undefined) {
+        expect(host.serialize().widgets_values).toEqual(c.expectedWidgetsValues)
+      }
+      if (c.promptByIndex) {
+        const { output } = await graphToPrompt(host.rootGraph)
+        for (const [iStr, value] of Object.entries(c.promptByIndex)) {
+          const i = Number(iStr)
+          expect(output[`${host.id}:${sources[i].node.id}`].inputs.value).toBe(
+            value
+          )
+        }
+      }
+    })
+
+    type ControlCase = {
+      name: string
+      editVia: 'viewKey' | 'vue'
+      controlMode: 'increment' | 'fixed'
+      controlMarker: boolean
+      seedHostValue: number
+      mutateSourceSeedAfterReorder?: number
+      callAfterQueued?: boolean
+      expect: {
+        promptSeed?: number
+        sourceSeed?: number
+        processedSeedValue?: number
+        hostSeedValue?: number
+        storeSeedValue?: number
+      }
+    }
+
+    const controlCases: ControlCase[] = [
+      {
+        name: 'ViewKey + increment: source seed mutation after reorder is ignored in prompt',
+        editVia: 'viewKey',
+        controlMode: 'increment',
+        controlMarker: false,
+        seedHostValue: 123456,
+        mutateSourceSeedAfterReorder: 789,
+        expect: { promptSeed: 123456 }
+      },
+      {
+        name: 'Vue + fixed: pushes Vue value to source seed',
+        editVia: 'vue',
+        controlMode: 'fixed',
+        controlMarker: false,
+        seedHostValue: 123456,
+        expect: { sourceSeed: 123456 }
+      },
+      {
+        name: 'Vue + increment + afterQueued: processed widgets reflect increment',
+        editVia: 'vue',
+        controlMode: 'increment',
+        controlMarker: true,
+        seedHostValue: 123456,
+        callAfterQueued: true,
+        expect: { processedSeedValue: 123457 }
+      },
+      {
+        name: 'ViewKey + increment + afterQueued: host seed increments without source value',
+        editVia: 'viewKey',
+        controlMode: 'increment',
+        controlMarker: true,
+        seedHostValue: 2,
+        mutateSourceSeedAfterReorder: 8,
+        callAfterQueued: true,
+        expect: { hostSeedValue: 3, storeSeedValue: 3 }
+      }
+    ]
+
+    it.each(controlCases)('$name', async (c) => {
+      const subgraph = createTestSubgraph()
+      const sources = buildSources(
+        subgraph,
+        TEXT_TEXT_SEED.map((s) =>
+          s.title === 'Sampler' ? { ...s, hugeMaxSeed: true } : s
+        )
+      )
+      const [, , seed] = sources
+      const host = createTestSubgraphNode(subgraph)
+      if (c.expect.promptSeed !== undefined) {
+        host.comfyClass = 'Subgraph'
+        host.graph?.add(host)
+      }
+
+      if (c.editVia === 'viewKey') {
+        host.widgets[0].value = 'positive prompt'
+        host.widgets[1].value = 'negative prompt'
+        host.widgets[2].value = c.seedHostValue
+        seed.widget.linkedWidgets = [
+          makeControlWidget(c.controlMode, c.controlMarker) as never
+        ]
+      } else {
+        seed.widget.linkedWidgets = [
+          makeControlWidget(c.controlMode, c.controlMarker) as never
+        ]
+        vueEdit(host, 2, c.seedHostValue)
+      }
+
+      reorderSubgraphInputAtIndex(host, 2, 1)
+
+      if (c.mutateSourceSeedAfterReorder !== undefined) {
+        seed.widget.value = c.mutateSourceSeedAfterReorder
+      }
+      if (c.callAfterQueued) host.widgets[1].afterQueued?.()
+
+      if (c.expect.promptSeed !== undefined) {
+        const { output } = await graphToPrompt(host.rootGraph)
+        expect(output[`${host.id}:${seed.node.id}`].inputs.value).toBe(
+          c.expect.promptSeed
+        )
+      }
+      if (c.expect.sourceSeed !== undefined) {
+        expect(seed.widget.value).toBe(c.expect.sourceSeed)
+      }
+      if (c.expect.processedSeedValue !== undefined) {
+        const updated = computeProcessedWidgets({
+          nodeData: extractVueNodeData(host),
+          graphId: host.rootGraph.id,
+          showAdvanced: false,
+          isGraphReady: false,
+          rootGraph: null,
+          ui: { getTooltipConfig: () => ({}), handleNodeRightClick: () => {} }
+        })
+        expect(updated[1].value).toBe(c.expect.processedSeedValue)
+      }
+      if (c.expect.hostSeedValue !== undefined) {
+        expect(host.widgets[1].value).toBe(c.expect.hostSeedValue)
+      }
+      if (c.expect.storeSeedValue !== undefined) {
+        expect(
+          useWidgetValueStore()
+            .getNodeWidgets(host.rootGraph.id, host.id)
+            .find((entry) => entry.name.startsWith('seed:'))?.value
+        ).toBe(c.expect.storeSeedValue)
+      }
+    })
+
     it('serializes promoted values from each host independently', () => {
       const subgraph = createTestSubgraph({
         inputs: [{ name: 'value', type: 'number' }]
@@ -176,62 +532,21 @@ describe('SubgraphNode.serialize (ADR 0009)', () => {
       expect(secondHost.serialize().widgets_values).toEqual([222])
     })
 
-    it('keeps promoted values attached to their inputs after reordering', () => {
-      const subgraph = createTestSubgraph()
-      const first = createNodeWithWidget('First', 'number', 1)
-      const second = createNodeWithWidget('Second', 'number', 2)
-      subgraph.add(first.node)
-      subgraph.add(second.node)
-
-      const firstInput = subgraph.addInput('first', 'number')
-      firstInput.connect(first.input, first.node)
-      const secondInput = subgraph.addInput('second', 'number')
-      secondInput.connect(second.input, second.node)
-
-      const host = createTestSubgraphNode(subgraph)
-      host.widgets[0].value = 111
-      host.widgets[1].value = 222
-
-      reorderSubgraphInputsByName(host, ['second', 'first'])
-
-      expect(host.widgets.map((widget) => widget.name)).toEqual([
-        'second',
-        'first'
-      ])
-      expect(host.serialize().widgets_values).toEqual([222, 111])
-    })
-
     it('does not persist source widget store fallback values after reordering', () => {
       const subgraph = createTestSubgraph()
-      const first = createNodeWithWidget('First', 'text', '', 'STRING')
-      const second = createNodeWithWidget('Second', 'text', '', 'STRING')
-      subgraph.add(first.node)
-      subgraph.add(second.node)
-
-      const firstInput = subgraph.addInput('first', 'STRING')
-      firstInput.connect(first.input, first.node)
-      const secondInput = subgraph.addInput('second', 'STRING')
-      secondInput.connect(second.input, second.node)
-
+      const sources = buildSources(subgraph, TEXT_PAIR)
       const host = createTestSubgraphNode(subgraph)
       const widgetStore = useWidgetValueStore()
-      widgetStore.registerWidget(host.rootGraph.id, {
-        nodeId: first.node.id,
-        name: first.widget.name,
-        type: first.widget.type,
-        value: 'first value',
-        options: {}
-      })
-      widgetStore.registerWidget(host.rootGraph.id, {
-        nodeId: second.node.id,
-        name: second.widget.name,
-        type: second.widget.type,
-        value: 'second value',
-        options: {}
-      })
-
+      for (const { node, widget } of sources) {
+        widgetStore.registerWidget(host.rootGraph.id, {
+          nodeId: node.id,
+          name: widget.name,
+          type: widget.type,
+          value: `${node.title} value`,
+          options: {}
+        })
+      }
       reorderSubgraphInputsByName(host, ['second', 'first'])
-
       expect(host.serialize().widgets_values).toBeUndefined()
     })
 
@@ -268,15 +583,7 @@ describe('SubgraphNode.serialize (ADR 0009)', () => {
 
     it('does not hydrate missing widgets_values entries as explicit host overlays', () => {
       const subgraph = createTestSubgraph()
-      const first = createNodeWithWidget('First', 'text', '', 'STRING')
-      const second = createNodeWithWidget('Second', 'text', '', 'STRING')
-      subgraph.add(first.node)
-      subgraph.add(second.node)
-
-      const firstInput = subgraph.addInput('first', 'STRING')
-      firstInput.connect(first.input, first.node)
-      const secondInput = subgraph.addInput('second', 'STRING')
-      secondInput.connect(second.input, second.node)
+      buildSources(subgraph, TEXT_PAIR)
 
       const host = createTestSubgraphNode(subgraph, { id: 101 })
       host.widgets[1].value = 'second host value'
@@ -291,22 +598,21 @@ describe('SubgraphNode.serialize (ADR 0009)', () => {
       const reloaded = createTestSubgraphNode(subgraph, { id: 101 })
       reloaded.configure(serialized)
 
-      const firstReloadedWidget = reloaded.widgets[0]
-      const secondReloadedWidget = reloaded.widgets[1]
-      expectPromotedWidgetView(firstReloadedWidget)
-      expectPromotedWidgetView(secondReloadedWidget)
+      const [first, second] = reloaded.widgets
+      expectPromotedWidgetView(first)
+      expectPromotedWidgetView(second)
       expect(
         widgetStore.getWidget(
           reloaded.rootGraph.id,
           reloaded.id,
-          getHostStateName(firstReloadedWidget)
+          getHostStateName(first)
         )
       ).toBeUndefined()
       expect(
         widgetStore.getWidget(
           reloaded.rootGraph.id,
           reloaded.id,
-          getHostStateName(secondReloadedWidget)
+          getHostStateName(second)
         )?.value
       ).toBe('second host value')
       expect(
@@ -316,376 +622,6 @@ describe('SubgraphNode.serialize (ADR 0009)', () => {
         undefined,
         'second host value'
       ])
-    })
-
-    it('moves Vue-edited values with promoted widgets after reordering', () => {
-      const subgraph = createTestSubgraph()
-      const first = createNodeWithWidget('First', 'text', '', 'STRING')
-      const second = createNodeWithWidget('Second', 'text', '', 'STRING')
-      subgraph.add(first.node)
-      subgraph.add(second.node)
-
-      const firstInput = subgraph.addInput('first', 'STRING')
-      firstInput.connect(first.input, first.node)
-      const secondInput = subgraph.addInput('second', 'STRING')
-      secondInput.connect(second.input, second.node)
-
-      const host = createTestSubgraphNode(subgraph)
-      const nodeData = extractVueNodeData(host)
-      const widgets = computeProcessedWidgets({
-        nodeData,
-        graphId: host.rootGraph.id,
-        showAdvanced: false,
-        isGraphReady: false,
-        rootGraph: null,
-        ui: {
-          getTooltipConfig: () => ({}),
-          handleNodeRightClick: () => {}
-        }
-      })
-      widgets[0].updateHandler('first value')
-      widgets[1].updateHandler('second value')
-
-      reorderSubgraphInputsByName(host, ['second', 'first'])
-
-      expect(host.serialize().widgets_values).toEqual([
-        'second value',
-        'first value'
-      ])
-    })
-
-    it('sends Vue-edited values to dragged promoted widget targets', async () => {
-      const subgraph = createTestSubgraph()
-      const first = createNodeWithWidget('First', 'text', '', 'STRING')
-      const second = createNodeWithWidget('Second', 'text', '', 'STRING')
-      first.node.comfyClass = 'First'
-      second.node.comfyClass = 'Second'
-      subgraph.add(first.node)
-      subgraph.add(second.node)
-
-      const firstInput = subgraph.addInput('first', 'STRING')
-      firstInput.connect(first.input, first.node)
-      const secondInput = subgraph.addInput('second', 'STRING')
-      secondInput.connect(second.input, second.node)
-
-      const host = createTestSubgraphNode(subgraph)
-      host.comfyClass = 'Subgraph'
-      host.graph?.add(host)
-      const nodeData = extractVueNodeData(host)
-      const widgets = computeProcessedWidgets({
-        nodeData,
-        graphId: host.rootGraph.id,
-        showAdvanced: false,
-        isGraphReady: false,
-        rootGraph: null,
-        ui: {
-          getTooltipConfig: () => ({}),
-          handleNodeRightClick: () => {}
-        }
-      })
-      widgets[0].updateHandler('first value')
-      widgets[1].updateHandler('second value')
-
-      reorderSubgraphInputsByName(host, ['second', 'first'])
-
-      const { output } = await graphToPrompt(host.rootGraph)
-
-      expect(output[`${host.id}:${first.node.id}`].inputs.value).toBe(
-        'first value'
-      )
-      expect(output[`${host.id}:${second.node.id}`].inputs.value).toBe(
-        'second value'
-      )
-    })
-
-    it('keeps text and seed values on their targets when the seed input moves up', async () => {
-      const subgraph = createTestSubgraph()
-      const positive = createNodeWithWidget('Positive', 'text', '', 'STRING')
-      const seed = createNodeWithWidget('Sampler', 'number', 0, 'INT')
-      const negative = createNodeWithWidget('Negative', 'text', '', 'STRING')
-      positive.node.comfyClass = 'Positive'
-      seed.node.comfyClass = 'Sampler'
-      negative.node.comfyClass = 'Negative'
-      subgraph.add(positive.node)
-      subgraph.add(seed.node)
-      subgraph.add(negative.node)
-
-      const positiveInput = subgraph.addInput('text_1', 'STRING')
-      positiveInput.connect(positive.input, positive.node)
-      const negativeInput = subgraph.addInput('text', 'STRING')
-      negativeInput.connect(negative.input, negative.node)
-      const seedInput = subgraph.addInput('seed', 'INT')
-      seedInput.connect(seed.input, seed.node)
-
-      const host = createTestSubgraphNode(subgraph)
-      host.comfyClass = 'Subgraph'
-      host.graph?.add(host)
-      host.widgets[0].value = 'positive prompt'
-      host.widgets[1].value = 'negative prompt'
-      host.widgets[2].value = 123456
-
-      reorderSubgraphInputAtIndex(host, 2, 1)
-
-      const { output } = await graphToPrompt(host.rootGraph)
-
-      expect(host.serialize().widgets_values).toEqual([
-        'positive prompt',
-        123456,
-        'negative prompt'
-      ])
-      expect(output[`${host.id}:${positive.node.id}`].inputs.value).toBe(
-        'positive prompt'
-      )
-      expect(output[`${host.id}:${seed.node.id}`].inputs.value).toBe(123456)
-      expect(output[`${host.id}:${negative.node.id}`].inputs.value).toBe(
-        'negative prompt'
-      )
-    })
-
-    it('keeps Vue-edited text and seed values on their targets when the seed input moves up', async () => {
-      const subgraph = createTestSubgraph()
-      const positive = createNodeWithWidget('Positive', 'text', '', 'STRING')
-      const negative = createNodeWithWidget('Negative', 'text', '', 'STRING')
-      const seed = createNodeWithWidget('Sampler', 'number', 0, 'INT')
-      positive.node.comfyClass = 'Positive'
-      negative.node.comfyClass = 'Negative'
-      seed.node.comfyClass = 'Sampler'
-      subgraph.add(positive.node)
-      subgraph.add(negative.node)
-      subgraph.add(seed.node)
-
-      const positiveInput = subgraph.addInput('text_1', 'STRING')
-      positiveInput.connect(positive.input, positive.node)
-      const negativeInput = subgraph.addInput('text', 'STRING')
-      negativeInput.connect(negative.input, negative.node)
-      const seedInput = subgraph.addInput('seed', 'INT')
-      seedInput.connect(seed.input, seed.node)
-
-      const host = createTestSubgraphNode(subgraph)
-      host.comfyClass = 'Subgraph'
-      host.graph?.add(host)
-      const nodeData = extractVueNodeData(host)
-      const widgets = computeProcessedWidgets({
-        nodeData,
-        graphId: host.rootGraph.id,
-        showAdvanced: false,
-        isGraphReady: false,
-        rootGraph: null,
-        ui: {
-          getTooltipConfig: () => ({}),
-          handleNodeRightClick: () => {}
-        }
-      })
-      widgets[0].updateHandler('positive prompt')
-      widgets[1].updateHandler('negative prompt')
-      widgets[2].updateHandler(123456)
-
-      reorderSubgraphInputAtIndex(host, 2, 1)
-
-      const { output } = await graphToPrompt(host.rootGraph)
-
-      expect(host.serialize().widgets_values).toEqual([
-        'positive prompt',
-        123456,
-        'negative prompt'
-      ])
-      expect(output[`${host.id}:${positive.node.id}`].inputs.value).toBe(
-        'positive prompt'
-      )
-      expect(output[`${host.id}:${seed.node.id}`].inputs.value).toBe(123456)
-      expect(output[`${host.id}:${negative.node.id}`].inputs.value).toBe(
-        'negative prompt'
-      )
-    })
-
-    it('ignores direct source seed changes after the seed input moves up', async () => {
-      const subgraph = createTestSubgraph()
-      const positive = createNodeWithWidget('Positive', 'text', '', 'STRING')
-      const negative = createNodeWithWidget('Negative', 'text', '', 'STRING')
-      const seed = createNodeWithWidget('Sampler', 'number', 0, 'INT')
-      positive.node.comfyClass = 'Positive'
-      negative.node.comfyClass = 'Negative'
-      seed.node.comfyClass = 'Sampler'
-      subgraph.add(positive.node)
-      subgraph.add(negative.node)
-      subgraph.add(seed.node)
-
-      const positiveInput = subgraph.addInput('text_1', 'STRING')
-      positiveInput.connect(positive.input, positive.node)
-      const negativeInput = subgraph.addInput('text', 'STRING')
-      negativeInput.connect(negative.input, negative.node)
-      const seedInput = subgraph.addInput('seed', 'INT')
-      seedInput.connect(seed.input, seed.node)
-
-      const host = createTestSubgraphNode(subgraph)
-      host.comfyClass = 'Subgraph'
-      host.graph?.add(host)
-      host.widgets[0].value = 'positive prompt'
-      host.widgets[1].value = 'negative prompt'
-      host.widgets[2].value = 123456
-      reorderSubgraphInputAtIndex(host, 2, 1)
-
-      seed.widget.linkedWidgets = [
-        {
-          name: 'control_after_generate',
-          value: 'increment',
-          serialize: false,
-          beforeQueued: () => {},
-          afterQueued: () => {}
-        } as never
-      ]
-      seed.widget.value = 789
-
-      const { output } = await graphToPrompt(host.rootGraph)
-
-      expect(output[`${host.id}:${seed.node.id}`].inputs.value).toBe(123456)
-    })
-
-    it('syncs Vue-edited promoted seed values to the controlled source widget after moving seed up', async () => {
-      const subgraph = createTestSubgraph()
-      const positive = createNodeWithWidget('Positive', 'text', '', 'STRING')
-      const negative = createNodeWithWidget('Negative', 'text', '', 'STRING')
-      const seed = createNodeWithWidget('Sampler', 'number', 0, 'INT')
-      seed.widget.options.max = 1125899906842624
-      subgraph.add(positive.node)
-      subgraph.add(negative.node)
-      subgraph.add(seed.node)
-
-      const positiveInput = subgraph.addInput('text_1', 'STRING')
-      positiveInput.connect(positive.input, positive.node)
-      const negativeInput = subgraph.addInput('text', 'STRING')
-      negativeInput.connect(negative.input, negative.node)
-      const seedInput = subgraph.addInput('seed', 'INT')
-      seedInput.connect(seed.input, seed.node)
-
-      const host = createTestSubgraphNode(subgraph)
-      seed.widget.linkedWidgets = [
-        {
-          name: 'control_after_generate',
-          value: 'fixed',
-          serialize: false,
-          beforeQueued: () => {},
-          afterQueued: () => {}
-        } as never
-      ]
-      const nodeData = extractVueNodeData(host)
-      const widgets = computeProcessedWidgets({
-        nodeData,
-        graphId: host.rootGraph.id,
-        showAdvanced: false,
-        isGraphReady: false,
-        rootGraph: null,
-        ui: {
-          getTooltipConfig: () => ({}),
-          handleNodeRightClick: () => {}
-        }
-      })
-      widgets[2].updateHandler(123456)
-
-      reorderSubgraphInputAtIndex(host, 2, 1)
-
-      expect(seed.widget.value).toBe(123456)
-    })
-
-    it('shows a control-updated promoted seed value in processed widgets after moving seed up', () => {
-      const subgraph = createTestSubgraph()
-      const positive = createNodeWithWidget('Positive', 'text', '', 'STRING')
-      const negative = createNodeWithWidget('Negative', 'text', '', 'STRING')
-      const seed = createNodeWithWidget('Sampler', 'number', 0, 'INT')
-      seed.widget.options.max = 1125899906842624
-      subgraph.add(positive.node)
-      subgraph.add(negative.node)
-      subgraph.add(seed.node)
-
-      const positiveInput = subgraph.addInput('text_1', 'STRING')
-      positiveInput.connect(positive.input, positive.node)
-      const negativeInput = subgraph.addInput('text', 'STRING')
-      negativeInput.connect(negative.input, negative.node)
-      const seedInput = subgraph.addInput('seed', 'INT')
-      seedInput.connect(seed.input, seed.node)
-
-      const host = createTestSubgraphNode(subgraph)
-      const nodeData = extractVueNodeData(host)
-      const widgets = computeProcessedWidgets({
-        nodeData,
-        graphId: host.rootGraph.id,
-        showAdvanced: false,
-        isGraphReady: false,
-        rootGraph: null,
-        ui: {
-          getTooltipConfig: () => ({}),
-          handleNodeRightClick: () => {}
-        }
-      })
-      widgets[2].updateHandler(123456)
-      seed.widget.linkedWidgets = [
-        {
-          name: 'control_after_generate',
-          value: 'increment',
-          serialize: false,
-          beforeQueued: () => {},
-          afterQueued: () => {},
-          [IS_CONTROL_WIDGET]: true
-        } as never
-      ]
-      reorderSubgraphInputAtIndex(host, 2, 1)
-      host.widgets[1].afterQueued?.()
-
-      const updatedNodeData = extractVueNodeData(host)
-      const updatedWidgets = computeProcessedWidgets({
-        nodeData: updatedNodeData,
-        graphId: host.rootGraph.id,
-        showAdvanced: false,
-        isGraphReady: false,
-        rootGraph: null,
-        ui: {
-          getTooltipConfig: () => ({}),
-          handleNodeRightClick: () => {}
-        }
-      })
-
-      expect(updatedWidgets[1].value).toBe(123457)
-    })
-
-    it('increments the promoted host seed without using the source seed value', () => {
-      const subgraph = createTestSubgraph()
-      const positive = createNodeWithWidget('Positive', 'text', '', 'STRING')
-      const negative = createNodeWithWidget('Negative', 'text', '', 'STRING')
-      const seed = createNodeWithWidget('Sampler', 'number', 0, 'INT')
-      seed.widget.options.max = 1125899906842624
-      subgraph.add(positive.node)
-      subgraph.add(negative.node)
-      subgraph.add(seed.node)
-
-      const positiveInput = subgraph.addInput('text_1', 'STRING')
-      positiveInput.connect(positive.input, positive.node)
-      const negativeInput = subgraph.addInput('text', 'STRING')
-      negativeInput.connect(negative.input, negative.node)
-      const seedInput = subgraph.addInput('seed', 'INT')
-      seedInput.connect(seed.input, seed.node)
-
-      const host = createTestSubgraphNode(subgraph)
-      seed.widget.linkedWidgets = [
-        {
-          name: 'control_after_generate',
-          value: 'increment',
-          serialize: false,
-          beforeQueued: () => {},
-          afterQueued: () => {},
-          [IS_CONTROL_WIDGET]: true
-        } as never
-      ]
-      host.widgets[2].value = 2
-      reorderSubgraphInputAtIndex(host, 2, 1)
-      seed.widget.value = 8
-      host.widgets[1].afterQueued?.()
-
-      expect(host.widgets[1].value).toBe(3)
-      expect(
-        useWidgetValueStore()
-          .getNodeWidgets(host.rootGraph.id, host.id)
-          .find((entry) => entry.name.startsWith('seed:'))?.value
-      ).toBe(3)
     })
   })
 
