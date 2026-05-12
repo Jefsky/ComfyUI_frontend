@@ -660,64 +660,70 @@ describe('SubgraphNode.serialize (ADR 0009)', () => {
   })
 
   describe('previewExposures round-trip', () => {
+    const CANVAS = '$$canvas-image-preview'
+    const exposure12 = { sourceNodeId: '12', sourcePreviewName: CANVAS }
+    const exposure14 = { sourceNodeId: '14', sourcePreviewName: 'videopreview' }
+    const named12 = { name: CANVAS, ...exposure12 }
+    const named14 = { name: 'videopreview', ...exposure14 }
+
     it('hydrates previewExposures into the store during configure', () => {
-      const subgraph = createTestSubgraph()
-      const hostNode = createTestSubgraphNode(subgraph)
-      const rootGraphId = hostNode.rootGraph.id
-      const hostLocator = String(hostNode.id)
-
+      const hostNode = createTestSubgraphNode(createTestSubgraph())
       hostNode.properties.previewExposures = [
-        {
-          name: 'preview',
-          sourceNodeId: '12',
-          sourcePreviewName: '$$canvas-image-preview'
-        }
+        { name: 'preview', ...exposure12 }
       ]
-
       hostNode._internalConfigureAfterSlots()
 
       expect(
-        usePreviewExposureStore().getExposures(rootGraphId, hostLocator)
-      ).toEqual([
-        {
-          name: 'preview',
-          sourceNodeId: '12',
-          sourcePreviewName: '$$canvas-image-preview'
-        }
-      ])
+        usePreviewExposureStore().getExposures(
+          hostNode.rootGraph.id,
+          String(hostNode.id)
+        )
+      ).toEqual([{ name: 'preview', ...exposure12 }])
     })
 
-    it('writes previewExposures from the store on serialize', () => {
-      const subgraph = createTestSubgraph()
-      const hostNode = createTestSubgraphNode(subgraph)
+    type SerializeCase = {
+      name: string
+      addExposures: (typeof exposure12)[]
+      staleProperty?: {
+        name: string
+        sourceNodeId: string
+        sourcePreviewName: string
+      }[]
+      expected: (typeof named12)[] | undefined
+      expectLiveUnchanged?: boolean
+    }
 
+    const serializeCases: SerializeCase[] = [
+      {
+        name: 'writes previewExposures from the store on serialize',
+        addExposures: [exposure12, exposure14],
+        expected: [named12, named14]
+      },
+      {
+        name: 'omits previewExposures when the store has no entries for the host',
+        addExposures: [],
+        staleProperty: [
+          { name: 'stale', sourceNodeId: '0', sourcePreviewName: CANVAS }
+        ],
+        expected: undefined,
+        expectLiveUnchanged: true
+      }
+    ]
+
+    it.each(serializeCases)('$name', (c) => {
+      const hostNode = createTestSubgraphNode(createTestSubgraph())
+      if (c.staleProperty)
+        hostNode.properties.previewExposures = c.staleProperty
       const store = usePreviewExposureStore()
-      const rootGraphId = hostNode.rootGraph.id
-      const hostLocator = String(hostNode.id)
-
-      store.addExposure(rootGraphId, hostLocator, {
-        sourceNodeId: '12',
-        sourcePreviewName: '$$canvas-image-preview'
-      })
-      store.addExposure(rootGraphId, hostLocator, {
-        sourceNodeId: '14',
-        sourcePreviewName: 'videopreview'
-      })
+      for (const e of c.addExposures) {
+        store.addExposure(hostNode.rootGraph.id, String(hostNode.id), e)
+      }
 
       const serialized = hostNode.serialize()
-
-      expect(serialized.properties?.previewExposures).toEqual([
-        {
-          name: '$$canvas-image-preview',
-          sourceNodeId: '12',
-          sourcePreviewName: '$$canvas-image-preview'
-        },
-        {
-          name: 'videopreview',
-          sourceNodeId: '14',
-          sourcePreviewName: 'videopreview'
-        }
-      ])
+      expect(serialized.properties?.previewExposures).toEqual(c.expected)
+      if (c.expectLiveUnchanged) {
+        expect(hostNode.properties.previewExposures).toEqual(c.staleProperty)
+      }
     })
 
     it('serializes preview exposures per host instance', () => {
@@ -728,69 +734,31 @@ describe('SubgraphNode.serialize (ADR 0009)', () => {
       subgraph.rootGraph.add(secondHost)
 
       const store = usePreviewExposureStore()
-      const rootGraphId = firstHost.rootGraph.id
-
-      store.addExposure(rootGraphId, String(firstHost.id), {
-        sourceNodeId: '12',
-        sourcePreviewName: '$$canvas-image-preview'
-      })
-      store.addExposure(rootGraphId, String(secondHost.id), {
-        sourceNodeId: '14',
-        sourcePreviewName: 'videopreview'
-      })
+      store.addExposure(
+        firstHost.rootGraph.id,
+        String(firstHost.id),
+        exposure12
+      )
+      store.addExposure(
+        firstHost.rootGraph.id,
+        String(secondHost.id),
+        exposure14
+      )
 
       const firstExposures = firstHost.serialize().properties?.previewExposures
       const secondExposures =
         secondHost.serialize().properties?.previewExposures
-
-      expect(Array.isArray(firstExposures)).toBe(true)
-      expect(Array.isArray(secondExposures)).toBe(true)
-      if (!Array.isArray(firstExposures) || !Array.isArray(secondExposures))
+      if (!Array.isArray(firstExposures) || !Array.isArray(secondExposures)) {
         throw new Error('Expected serialized previewExposures arrays')
+      }
 
-      expect(firstExposures).toEqual([
-        {
-          name: '$$canvas-image-preview',
-          sourceNodeId: '12',
-          sourcePreviewName: '$$canvas-image-preview'
-        }
-      ])
-      expect(secondExposures).toEqual([
-        {
-          name: 'videopreview',
-          sourceNodeId: '14',
-          sourcePreviewName: 'videopreview'
-        }
-      ])
-      expect(firstExposures?.[0]).not.toHaveProperty('hostInstanceId')
-      expect(firstExposures?.[0]).not.toHaveProperty('hostNodeLocator')
-      expect(firstExposures?.[0]).not.toHaveProperty('rootGraphId')
-      expect(secondExposures?.[0]).not.toHaveProperty('hostInstanceId')
-      expect(secondExposures?.[0]).not.toHaveProperty('hostNodeLocator')
-      expect(secondExposures?.[0]).not.toHaveProperty('rootGraphId')
-    })
-
-    it('omits previewExposures when the store has no entries for the host', () => {
-      const subgraph = createTestSubgraph()
-      const hostNode = createTestSubgraphNode(subgraph)
-      hostNode.properties.previewExposures = [
-        {
-          name: 'stale',
-          sourceNodeId: '0',
-          sourcePreviewName: '$$canvas-image-preview'
-        }
-      ]
-
-      const serialized = hostNode.serialize()
-
-      expect(serialized.properties?.previewExposures).toBeUndefined()
-      expect(hostNode.properties.previewExposures).toEqual([
-        {
-          name: 'stale',
-          sourceNodeId: '0',
-          sourcePreviewName: '$$canvas-image-preview'
-        }
-      ])
+      expect(firstExposures).toEqual([named12])
+      expect(secondExposures).toEqual([named14])
+      for (const exposed of [firstExposures[0], secondExposures[0]]) {
+        expect(exposed).not.toHaveProperty('hostInstanceId')
+        expect(exposed).not.toHaveProperty('hostNodeLocator')
+        expect(exposed).not.toHaveProperty('rootGraphId')
+      }
     })
   })
 
